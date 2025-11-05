@@ -3,7 +3,6 @@
 import "dotenv/config";
 import { spawn, spawnSync } from "node:child_process";
 import type { SpawnSyncReturns } from "node:child_process";
-import { join } from "node:path";
 import { URL } from "node:url";
 import { createInterface } from "node:readline";
 
@@ -59,10 +58,6 @@ try {
 
 const model = requiredEnv(config.modelEnv);
 const env = { ...process.env, OLLAMA_HOST: host } as NodeJS.ProcessEnv;
-
-if (!process.env.OLLAMA_MODELS && mode === "secondary") {
-  env.OLLAMA_MODELS = join(process.cwd(), ".ollama-secondary");
-}
 
 console.log(`Using Ollama host ${env.OLLAMA_HOST} for model "${model}".`);
 
