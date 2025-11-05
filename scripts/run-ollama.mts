@@ -2,11 +2,13 @@
 
 import "dotenv/config";
 import { spawn, spawnSync } from "node:child_process";
+import type { SpawnSyncReturns } from "node:child_process";
 import { join } from "node:path";
 import { URL } from "node:url";
 import { createInterface } from "node:readline";
 
-const MODES = {
+type ModeKey = "primary" | "secondary";
+const MODES: Record<ModeKey, { portEnv: string; modelEnv: string }> = {
   primary: {
     portEnv: "NEXT_PUBLIC_OLLAMA_PRIMARY_PORT",
     modelEnv: "NEXT_PUBLIC_OLLAMA_PRIMARY_MODEL",
@@ -17,7 +19,8 @@ const MODES = {
   },
 };
 
-const mode = process.argv[2] ?? "primary";
+const modeArg = process.argv[2] ?? "primary";
+const mode = (modeArg as ModeKey) ?? "primary";
 const config = MODES[mode];
 
 if (!config) {
@@ -27,7 +30,7 @@ if (!config) {
   process.exit(1);
 }
 
-function requiredEnv(name) {
+function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
     console.error(`Missing required environment variable "${name}".`);
@@ -38,22 +41,24 @@ function requiredEnv(name) {
 
 const baseUrl = requiredEnv("NEXT_PUBLIC_BASE_URL");
 const port = requiredEnv(config.portEnv);
-let host;
+let host: string;
 
 const shouldUseSystemService = process.platform === "win32" && port === "11434";
 
 try {
   const url = new URL(baseUrl);
   host = `${url.hostname}:${port}`;
-} catch (error) {
+} catch (error: unknown) {
   console.error(
-    `Invalid NEXT_PUBLIC_BASE_URL "${baseUrl}": ${error.message ?? error}`
+    `Invalid NEXT_PUBLIC_BASE_URL "${baseUrl}": ${
+      (error as Error).message ?? error
+    }`
   );
   process.exit(1);
 }
 
 const model = requiredEnv(config.modelEnv);
-const env = { ...process.env, OLLAMA_HOST: host };
+const env = { ...process.env, OLLAMA_HOST: host } as NodeJS.ProcessEnv;
 
 if (!process.env.OLLAMA_MODELS && mode === "secondary") {
   env.OLLAMA_MODELS = join(process.cwd(), ".ollama-secondary");
@@ -61,17 +66,17 @@ if (!process.env.OLLAMA_MODELS && mode === "secondary") {
 
 console.log(`Using Ollama host ${env.OLLAMA_HOST} for model "${model}".`);
 
-let serveProcess;
+let serveProcess: ReturnType<typeof spawn> | undefined = undefined;
 
-function exitWithCleanup() {
+function exitWithCleanup(): never {
   if (serveProcess && serveProcess.exitCode === null) {
     serveProcess.kill("SIGTERM");
   }
   process.exit(1);
 }
 
-function pullModel() {
-  const pull = spawnSync("ollama", ["pull", model], {
+function pullModel(): void {
+  const pull: SpawnSyncReturns<Buffer> = spawnSync("ollama", ["pull", model], {
     env,
     stdio: "inherit",
   });
@@ -85,7 +90,11 @@ function pullModel() {
   }
 }
 
-async function waitForServer(hostname, timeoutMs = 30_000, pollMs = 500) {
+async function waitForServer(
+  hostname: string,
+  timeoutMs = 30_000,
+  pollMs = 500
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   const url = `http://${hostname}/api/version`;
 
@@ -124,35 +133,42 @@ serveProcess = spawn("ollama", ["serve"], {
   stdio: ["inherit", "pipe", "pipe"],
 });
 
-function forwardWithoutInfo(stream, write) {
+function forwardWithoutInfo(
+  stream: NodeJS.ReadableStream | null,
+  write: (s: string) => void
+) {
   if (!stream) return;
-  const rl = createInterface({ input: stream });
+  // `createInterface` expects a Readable stream; narrow the union first.
+  const readable = stream as NodeJS.ReadableStream;
+  const rl = createInterface({ input: readable });
   rl.on("line", (line) => {
     if (!line.includes("level=INFO")) {
       write(`${line}\n`);
     }
   });
-  serveProcess.on("close", () => rl.close());
+  serveProcess?.on("close", () => rl.close());
 }
 
-forwardWithoutInfo(serveProcess.stdout, (line) => process.stdout.write(line));
-forwardWithoutInfo(serveProcess.stderr, (line) => process.stderr.write(line));
+if (serveProcess) {
+  forwardWithoutInfo(serveProcess.stdout, (line) => process.stdout.write(line));
+  forwardWithoutInfo(serveProcess.stderr, (line) => process.stderr.write(line));
+}
 
-const forwardExit = (signal) => {
-  if (serveProcess.exitCode === null) {
+const forwardExit = (signal: NodeJS.Signals) => {
+  if (serveProcess && serveProcess.exitCode === null) {
     serveProcess.kill(signal);
   }
 };
 
-process.on("SIGINT", forwardExit);
-process.on("SIGTERM", forwardExit);
+process.on("SIGINT", () => forwardExit("SIGINT"));
+process.on("SIGTERM", () => forwardExit("SIGTERM"));
 
 try {
-  await waitForServer(env.OLLAMA_HOST);
-} catch (error) {
+  await waitForServer(env.OLLAMA_HOST as string);
+} catch (error: unknown) {
   console.error(
     `Ollama server at ${env.OLLAMA_HOST} failed to start: ${
-      error.message ?? error
+      (error as Error).message ?? error
     }`
   );
   exitWithCleanup();
@@ -160,10 +176,12 @@ try {
 
 pullModel();
 
-serveProcess.on("exit", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-  } else {
-    process.exit(code ?? 0);
-  }
-});
+if (serveProcess) {
+  serveProcess.on("exit", (code, signal) => {
+    if (signal) {
+      process.kill(process.pid, signal);
+    } else {
+      process.exit(code ?? 0);
+    }
+  });
+}
