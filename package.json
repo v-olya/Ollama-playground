@@ -9,9 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "tsc": "tsc --noEmit",
-    "compare": "ts-node --project tsconfig.json app/models/compare.ts",
-    "ollama:primary": "node --loader ts-node/esm scripts/run-ollama.mts primary",
-    "ollama:secondary": "node --loader ts-node/esm scripts/run-ollama.mts secondary"
+    "ollama:serve": "node --loader ts-node/esm scripts/run-ollama.mts"
   },
   "dependencies": {
     "@langchain/core": "^1.0.2",

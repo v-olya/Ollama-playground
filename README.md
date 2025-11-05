@@ -51,21 +51,11 @@
   npm run tsc
   ```
 
-- **Scripts to run ollama models simultaneously**:
-  - Primary mode:
-    ```bash
-    npm run ollama:primary
-    ```
-  - Secondary mode:
-    ```bash
-    npm run ollama:secondary
-    ```
-
 ## Configuration
 
 - **Environment Variables**:
   - Create a `.env` file in the root directory (or rename `.example.env`)
-  - Define the required variables (e.g., `NEXT_PUBLIC_BASE_URL`, `NEXT_PUBLIC_OLLAMA_PRIMARY_PORT`).
+  - Define the required variables: `BASE_URL`, `OLLAMA_API_KEY`.
 
 ## License
 

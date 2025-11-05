@@ -1,88 +1,112 @@
 "use client";
+import { useRef, useState } from "react";
+import { type ChatPanelHandle } from "../helpers/types";
+import { ChatPanel } from "./ChatPanel";
+import SendButton from "./SendButton";
+import PromptTextarea from "./PromptTextarea";
 
-import React, { useState } from "react";
-import ChatPanel, { Message } from "./ChatPanel";
+const MODEL_OPTIONS = [
+  { value: "qwen2.5-coder:7b" },
+  { value: "qwen3-coder:480b-cloud" },
+  {
+    value: "gpt-oss:120b-cloud",
+  },
+  {
+    value: "gpt-oss:20b-cloud",
+  },
+  {
+    value: "deepseek-v3.1:671b-cloud",
+  },
+  {
+    value: "qwen3-vl:235b-cloud",
+  },
+  {
+    value: "minimax-m2:cloud",
+  },
+  {
+    value: "glm-4.6:cloud",
+  },
+  {
+    value: "kimi-k2:1t-cloud",
+  },
+  {
+    value: "gemma3:4b",
+  },
+  {
+    value: "codegemma:7b-instruct-v1.1-q4_0",
+  },
+];
+
+const DEFAULT_SYSTEM_PROMPT =
+  "You are a helpful assistant. Provide a clear, concise, and well-formatted response. When appropriate, add examples, explanations, and code snippets. Prioritize correctness, readability, and relevance.";
+const DEFAULT_USER_PROMPT =
+  "What is the difference between 'ollama run' and 'ollama serve' commands?";
 
 export default function TwoChatsLayout() {
-  const [systemPrompt, setSystemPrompt] = useState(
-    "You are a helpful assistant. Provide concise answers."
-  );
-  const [userPrompt, setUserPrompt] = useState(
-    "Explain the key differences between two similar commands."
-  );
+  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [userPrompt, setUserPrompt] = useState(DEFAULT_USER_PROMPT);
+  const leftRef = useRef<ChatPanelHandle | null>(null);
+  const rightRef = useRef<ChatPanelHandle | null>(null);
+  const [isRestarting, setIsRestarting] = useState(false);
 
-  // track whether initial send happened; once true both panels become independent
-  const [initialSent, setInitialSent] = useState(false);
-
-  const [leftMessages, setLeftMessages] = useState<Message[]>([]);
-  const [rightMessages, setRightMessages] = useState<Message[]>([]);
-
-  function handleInitialSend() {
-    // build initial messages for each side using shared prompts
-    const systemMsg: Message = {
-      id: `s-${Date.now()}`,
-      role: "system",
-      content: systemPrompt,
-    };
-    const userMsg: Message = {
-      id: `u-${Date.now()}`,
-      role: "user",
-      content: userPrompt,
-    };
-    // seed both panels; later they accept independent input
-    setLeftMessages([systemMsg, userMsg]);
-    setRightMessages([systemMsg, userMsg]);
-    setInitialSent(true);
+  async function restartChats() {
+    if (isRestarting) return;
+    setIsRestarting(true);
+    try {
+      const tasks: Promise<void>[] = [];
+      if (leftRef.current) tasks.push(leftRef.current.resetSession());
+      if (rightRef.current) tasks.push(rightRef.current.resetSession());
+      if (tasks.length) {
+        await Promise.all(tasks);
+      }
+    } finally {
+      setIsRestarting(false);
+    }
   }
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       <div className="mb-6 grid gap-4">
-        <label className="flex w-full flex-col gap-2">
-          <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300 text-right">
-            System prompt
-          </div>
-          <textarea
-            className="h-20 w-full rounded-md border border-zinc-200 p-2 text-sm outline-none focus:ring-2 focus:ring-sky-300 dark:border-zinc-800 dark:bg-transparent"
-            value={systemPrompt}
-            onChange={(e) => setSystemPrompt(e.target.value)}
-          />
-        </label>
-
-        <label className="flex w-full flex-col gap-2">
-          <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300 text-right">
-            User prompt
-          </div>
-          <textarea
-            className="h-20 w-full rounded-md border border-zinc-200 p-2 text-sm outline-none focus:ring-2 focus:ring-sky-300 dark:border-zinc-800 dark:bg-transparent"
-            value={userPrompt}
-            onChange={(e) => setUserPrompt(e.target.value)}
-          />
-        </label>
-
-        <div className="flex w-full items-center justify-end">
-          <button
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-80"
-            onClick={handleInitialSend}
-            disabled={initialSent}
-          >
-            Send to both
-          </button>
-        </div>
+        <PromptTextarea
+          label="System prompt"
+          value={systemPrompt}
+          onChange={setSystemPrompt}
+          restartChats={restartChats}
+        />
+        <PromptTextarea
+          label="User prompt"
+          value={userPrompt}
+          onChange={setUserPrompt}
+          restartChats={restartChats}
+        />
+      </div>
+      <div className="mb-4 flex items-center justify-end">
+        <SendButton
+          onClick={() => {
+            leftRef.current?.triggerSend();
+            rightRef.current?.triggerSend();
+          }}
+        >
+          Send to all
+        </SendButton>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <ChatPanel
-          title="Model A"
-          initialMessages={leftMessages}
-          disabled={!initialSent}
-          onSendLocal={(m) => setLeftMessages((s) => [...s, m])}
+          ref={leftRef}
+          mode="primary"
+          modelOptions={MODEL_OPTIONS}
+          defaultModel={MODEL_OPTIONS[0].value}
+          systemPrompt={systemPrompt}
+          userPrompt={userPrompt}
         />
         <ChatPanel
-          title="Model B"
-          initialMessages={rightMessages}
-          disabled={!initialSent}
-          onSendLocal={(m) => setRightMessages((s) => [...s, m])}
+          ref={rightRef}
+          mode="secondary"
+          modelOptions={MODEL_OPTIONS}
+          defaultModel={MODEL_OPTIONS[1].value}
+          systemPrompt={systemPrompt}
+          userPrompt={userPrompt}
         />
       </div>
     </div>

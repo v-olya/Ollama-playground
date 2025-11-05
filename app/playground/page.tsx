@@ -8,7 +8,7 @@ export default function PlaygroundPage() {
   return (
     <main className="min-h-screen py-12">
       <h1 className="mx-auto max-w-6xl px-6 text-2xl font-semibold text-center">
-        Clash the models
+        Clash the selected Ollama models
       </h1>
       <TwoChatsLayout />
     </main>
