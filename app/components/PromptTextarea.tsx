@@ -16,7 +16,7 @@ export function PromptTextarea({ label, value, onChange, restartChats, placehold
 
   const handleBeforeChange = () => {
     const confirmed = window.confirm(
-      "If you modify the prompt, the current conversation will be cleared. Are you sure you want to restart the chat?"
+      "If you modify the prompt, the current chat will be restarted.\n Are you sure you want to restart?"
     );
     if (!confirmed) return false;
     restartChats();
