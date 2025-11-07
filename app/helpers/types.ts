@@ -9,8 +9,6 @@ export interface Message {
 export type ChatPanelHandle = {
   triggerSend: () => void;
   resetSession: () => Promise<void>;
+  isLoading: boolean;
+  isThinking: boolean;
 };
-
-export function nextId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
