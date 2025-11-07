@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "set NODE_OPTIONS=--trace-deprecation && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "tsc": "tsc --noEmit",
-    "ollama:serve": "node --loader ts-node/esm scripts/run-ollama.mts"
+    "ollama:pull": "node --loader ts-node/esm scripts/pull-ollama.mts"
   },
   "dependencies": {
     "@langchain/core": "^1.0.2",
@@ -27,7 +27,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.1",
     "tailwindcss": "^4",
-    "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }
