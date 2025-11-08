@@ -1,6 +1,6 @@
 "use client";
 
-import { FocusEvent, useState, type ChangeEvent } from "react";
+import { FocusEvent, useRef, useEffect, type ChangeEvent } from "react";
 
 interface PromptTextareaProps {
   label: string;
@@ -9,18 +9,33 @@ interface PromptTextareaProps {
   restartChats: () => void;
   placeholder?: string;
   className?: string;
+  // When false, skip the before-change confirmation on blur
+  confirmOnBlur?: boolean;
 }
 
-export function PromptTextarea({ label, value, onChange, restartChats, placeholder }: PromptTextareaProps) {
-  const [initialValue, setInitialValue] = useState("");
+export function confirmBeforeChange(restartChats: () => void) {
+  const confirmed = window.confirm(
+    "If you modify the prompt, the current chat will be restarted.\n Are you sure you want to restart?"
+  );
+  if (!confirmed) return false;
+  restartChats();
+  return true;
+}
+
+export function PromptTextarea({
+  label,
+  value,
+  onChange,
+  restartChats,
+  placeholder,
+  confirmOnBlur = true,
+}: PromptTextareaProps) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const dirtyCalledRef = useRef(false);
 
   const handleBeforeChange = () => {
-    const confirmed = window.confirm(
-      "If you modify the prompt, the current chat will be restarted.\n Are you sure you want to restart?"
-    );
-    if (!confirmed) return false;
-    restartChats();
-    return true;
+    if (confirmOnBlur === false) return true;
+    return confirmBeforeChange(restartChats);
   };
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
@@ -28,21 +43,35 @@ export function PromptTextarea({ label, value, onChange, restartChats, placehold
     if (e.target.parentElement) {
       e.target.parentElement.dataset.clonedVal = e.target.value;
     }
+    dirtyCalledRef.current = true;
   };
-  const handleFocus = (e: FocusEvent) => {
-    const textarea = e.target as HTMLTextAreaElement;
-    setInitialValue(textarea.value);
-  };
+
+  // Keep the displayed textarea value in sync when `value` prop changes from parent.
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.value = value;
+      if (textarea.parentElement) {
+        textarea.parentElement.dataset.clonedVal = value;
+      }
+      // Parent-controlled updates mean this was not a user edit — reset dirty flag
+      dirtyCalledRef.current = false;
+    }
+  }, [value]);
   const handleBlur = (e: FocusEvent) => {
     const textarea = e.target as HTMLTextAreaElement;
-    if (textarea.value !== initialValue) {
-      const shouldProceed = handleBeforeChange();
-      if (shouldProceed === false) {
-        // Restore the displayed value
-        textarea.value = initialValue;
-      } else {
-        onChange(textarea.value);
-      }
+    // If the user didn't interact (no onChange fired), skip confirmation.
+    if (!dirtyCalledRef.current) return;
+
+    const shouldProceed = handleBeforeChange();
+    if (shouldProceed === false) {
+      textarea.value = value;
+      if (textarea.parentElement) textarea.parentElement.dataset.clonedVal = value;
+      dirtyCalledRef.current = false;
+    } else {
+      // Commit the user's change to the parent and clear dirty flag
+      onChange(textarea.value);
+      dirtyCalledRef.current = false;
     }
   };
 
@@ -68,12 +97,12 @@ export function PromptTextarea({ label, value, onChange, restartChats, placehold
         data-cloned-val={value}
       >
         <textarea
+          ref={textareaRef}
           className="min-h-10 w-full rounded-md border border-zinc-200 p-2 text-sm outline-none focus:ring-2 focus:ring-sky-300 dark:border-zinc-800 dark:bg-transparent"
           defaultValue={value}
           placeholder={placeholder}
           onChange={handleChange}
           onBlur={handleBlur}
-          onFocus={handleFocus}
         />
       </div>
     </label>
