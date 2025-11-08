@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isModelPulled } from "../ollama/route";
+import { isModelPulled, stopModel } from "../ollama/route";
 import { getMessage } from "@/app/helpers/functions";
 
 // Per-model replace-in-flight gate: latest wins
@@ -20,12 +20,72 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  let model = "";
+  let controller: AbortController | null = null;
+  let timeoutController: AbortController | null = null;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let key = "";
+  let cleaned = false;
+  let stopIssued = false;
+  let onRequestAbort: (() => void) | null = null;
+  let onControllerAbort: (() => void) | null = null;
+  let onTimeoutAbort: (() => void) | null = null;
+
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+
+    if (onRequestAbort) {
+      request.signal.removeEventListener("abort", onRequestAbort);
+      onRequestAbort = null;
+    }
+
+    if (controller && onControllerAbort) {
+      controller.signal.removeEventListener("abort", onControllerAbort);
+      onControllerAbort = null;
+    }
+
+    if (timeoutController && onTimeoutAbort) {
+      timeoutController.signal.removeEventListener("abort", onTimeoutAbort);
+      onTimeoutAbort = null;
+    }
+
+    if (key) {
+      const entry = activeByModel.get(key);
+      if (entry?.controller === controller) {
+        activeByModel.delete(key);
+      }
+    }
+  };
+
+  const stopAndCleanup = (reason: string) => {
+    if (!model) {
+      cleanup();
+      return;
+    }
+
+    if (!stopIssued) {
+      stopIssued = true;
+      console.log(`Auto-stopping model after ${reason}:`, model);
+      const outcome = stopModel(model);
+      if (outcome === "failed") {
+        console.warn(`Failed to stop model "${model}" after ${reason}.`);
+      }
+    }
+
+    cleanup();
+  };
   try {
     const body = await request.json().catch(() => {
       console.warn("No response body");
     });
 
-    const model = typeof body.model === "string" ? body.model.trim() : "";
+    model = typeof body.model === "string" ? body.model.trim() : "";
     if (!model) {
       return NextResponse.json({ error: "Model is required." }, { status: 400 });
     }
@@ -54,22 +114,38 @@ export async function POST(request: Request) {
     }
 
     // Abort any existing run for this model key
-    const key = `${baseUrl}|${model}`;
+    key = `${baseUrl}|${model}`;
     const prev = activeByModel.get(key);
     try {
       prev?.controller.abort();
     } catch {}
 
     // Create a controller and tie it to request.abort
-    const controller = new AbortController();
-    const onAbort = () => controller.abort();
-    request.signal.addEventListener("abort", onAbort);
-    activeByModel.set(key, { controller });
+    controller = new AbortController();
+    const controllerRef = controller;
+    onControllerAbort = () => stopAndCleanup("abort");
+    controllerRef.signal.addEventListener("abort", onControllerAbort);
+
+    onRequestAbort = () => {
+      stopAndCleanup("abort");
+      controllerRef.abort();
+    };
+    request.signal.addEventListener("abort", onRequestAbort);
+
+    activeByModel.set(key, { controller: controllerRef });
 
     // Overall timeout for upstream call
     const timeoutMs = Number(45000);
-    const timeoutController = new AbortController();
-    const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
+    timeoutController = new AbortController();
+    const timeoutControllerRef = timeoutController;
+    onTimeoutAbort = () => {
+      stopAndCleanup("timeout");
+      try {
+        controllerRef.abort();
+      } catch {}
+    };
+    timeoutControllerRef.signal.addEventListener("abort", onTimeoutAbort);
+    timeoutId = setTimeout(() => timeoutControllerRef.abort(), timeoutMs);
 
     const upstream = await fetch(`${baseUrl}/api/chat`, {
       method: "POST",
@@ -79,12 +155,12 @@ export async function POST(request: Request) {
         const merged = new AbortController();
         const onAbort1 = () => merged.abort();
         const onAbort2 = () => merged.abort();
-        controller.signal.addEventListener("abort", onAbort1);
-        timeoutController.signal.addEventListener("abort", onAbort2);
+        controllerRef.signal.addEventListener("abort", onAbort1);
+        timeoutControllerRef.signal.addEventListener("abort", onAbort2);
         // Clean up listeners when merged aborts
         merged.signal.addEventListener("abort", () => {
-          controller.signal.removeEventListener("abort", onAbort1);
-          timeoutController.signal.removeEventListener("abort", onAbort2);
+          controllerRef.signal.removeEventListener("abort", onAbort1);
+          timeoutControllerRef.signal.removeEventListener("abort", onAbort2);
         });
         return merged.signal;
       })(),
@@ -95,14 +171,19 @@ export async function POST(request: Request) {
       }),
     });
 
-    clearTimeout(timeoutId);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
 
     if (!upstream.body) {
+      cleanup();
       return NextResponse.json({ error: "No upstream stream" }, { status: 502 });
     }
 
     if (!upstream.ok) {
       const errTxt = await upstream.text().catch(() => "");
+      cleanup();
       return NextResponse.json({ error: errTxt || `Upstream error ${upstream.status}` }, { status: 502 });
     }
 
@@ -112,10 +193,11 @@ export async function POST(request: Request) {
 
     const stream = new ReadableStream<Uint8Array>({
       async pull(streamController) {
-        if (controller.signal.aborted) {
+        if (controllerRef.signal.aborted) {
           try {
             await reader.cancel();
           } catch {}
+          stopAndCleanup("abort");
           streamController.close();
           return;
         }
@@ -123,6 +205,7 @@ export async function POST(request: Request) {
           try {
             await reader.cancel();
           } catch {}
+          stopAndCleanup("abort");
           streamController.close();
           return;
         }
@@ -130,12 +213,13 @@ export async function POST(request: Request) {
         const chunkTimeoutMs = Number(20000);
         const chunkTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
           try {
-            controller.abort();
+            controllerRef.abort();
           } catch {}
         }, chunkTimeoutMs);
         const { done, value } = await reader.read();
         if (chunkTimer) clearTimeout(chunkTimer);
         if (done) {
+          stopAndCleanup("completion");
           streamController.close();
           return;
         }
@@ -164,6 +248,7 @@ export async function POST(request: Request) {
             continue;
           }
           if (json?.done) {
+            stopAndCleanup("completion");
             streamController.close();
             return;
           }
@@ -179,8 +264,9 @@ export async function POST(request: Request) {
           await reader.cancel();
         } catch {}
         try {
-          controller.abort();
+          controllerRef.abort();
         } catch {}
+        stopAndCleanup("cancel");
       },
     });
 
@@ -192,15 +278,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // when response finishes or if the controller is superseded
-    const cleanup = () => {
-      request.signal.removeEventListener("abort", onAbort);
-      const entry = activeByModel.get(key);
-      if (entry?.controller === controller) {
-        activeByModel.delete(key);
-      }
-    };
-    Promise.resolve().finally(cleanup);
     return response;
   } catch (err) {
     // If the request was aborted, don't log it as an error
@@ -213,11 +290,13 @@ export async function POST(request: Request) {
     }
 
     if (isAborted) {
+      stopAndCleanup("exception");
       // 499 (Client Closed Request)
       // client will receive it if only its connection is still open,
       // i.e.the request was aborted by the Server, not by the Client itself
       return NextResponse.json({ error: "aborted" }, { status: 499 });
     }
+    stopAndCleanup("error");
     return NextResponse.json({ error: getMessage(err) }, { status: 500 });
   }
 }
