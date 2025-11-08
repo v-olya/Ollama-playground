@@ -24,7 +24,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // controller for aborting an in-flight generation request
+  // controller for aborting a generation request
   const generationControllerRef = useRef<AbortController | null>(null);
   const pendingStartRef = useRef<{ model: string; controller: AbortController } | null>(null);
 
@@ -46,8 +46,9 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
     return () => {
       generationControllerRef.current?.abort();
       pendingStartRef.current?.controller.abort();
+      // Note: Model stopping is handled at the parent level (TwoChatsLayout)
     };
-  }, []);
+  }, [mode]);
 
   const sendAction = useCallback(
     async (action: ActionKey, model: string | null | undefined): Promise<{ aborted: boolean }> => {
