@@ -203,12 +203,16 @@ export async function POST(request: Request) {
     Promise.resolve().finally(cleanup);
     return response;
   } catch (err) {
-    console.error("Error in /api/compare:", err);
-    // If the request was aborted, surface a distinct status for the FE
-    if (
+    // If the request was aborted, don't log it as an error
+    const isAborted =
       (err instanceof DOMException && err.name === "AbortError") ||
-      (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError")
-    ) {
+      (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError");
+
+    if (!isAborted) {
+      console.error("Error in /api/compare:", err);
+    }
+
+    if (isAborted) {
       // 499 (Client Closed Request)
       // client will receive it if only its connection is still open,
       // i.e.the request was aborted by the Server, not by the Client itself
