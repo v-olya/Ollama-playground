@@ -32,7 +32,6 @@ export function AIDialogue({ systemPrompt, userPrompt, modelA, modelB, isActive 
 
   useEffect(() => {
     if (isActive && !hasStartedRef.current && userPrompt.trim()) {
-      console.log("Starting dialogue...", { isActive, userPrompt, modelA, modelB });
       hasStartedRef.current = true;
       startDialogue();
     }
@@ -40,7 +39,6 @@ export function AIDialogue({ systemPrompt, userPrompt, modelA, modelB, isActive 
   }, [isActive]);
 
   const startDialogue = async () => {
-    console.log("startDialogue called");
     setConversation([]);
     setError(null);
     turnCountRef.current = 0;
@@ -102,7 +100,6 @@ export function AIDialogue({ systemPrompt, userPrompt, modelA, modelB, isActive 
   };
 
   const getModelResponse = async (model: string, speaker: "A" | "B", conversationHistory: Message[]) => {
-    console.log(`getModelResponse called for Model ${speaker}`, { model, historyLength: conversationHistory.length });
     if (turnCountRef.current >= maxTurns) {
       setIsThinking(false);
       setCurrentSpeaker(null);
