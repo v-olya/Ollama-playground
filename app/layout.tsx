@@ -46,7 +46,7 @@ export default function RootLayout({
             </Link>
           </nav>
 
-          <main>{children}</main>
+          <div className="min-h-screen py-12">{children}</div>
         </div>
       </body>
     </html>
