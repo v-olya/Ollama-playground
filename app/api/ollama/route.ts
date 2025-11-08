@@ -126,7 +126,7 @@ export async function POST(request: Request) {
     // (action === "stop")
     try {
       if (!isModelPulled(model)) {
-        return NextResponse.json({ stopped: "ignored, not found" });
+        return NextResponse.json({ stop: "ignored, not found" });
       }
       const stop = spawnSync("ollama", ["stop", model], {
         stdio: "inherit",
