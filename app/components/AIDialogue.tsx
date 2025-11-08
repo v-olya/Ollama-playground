@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { ConversationDisplay } from "./ConversationDisplay";
 import { type Message } from "../helpers/types";
 import { getMessage, nextId } from "../helpers/functions";
+import { maxTurns } from "../clash/page";
 
 interface AIDialogueProps {
   systemPrompt: string;
@@ -22,7 +23,6 @@ export function AIDialogue({ systemPrompt, userPrompt, modelA, modelB, isActive 
   const controllerRef = useRef<AbortController | null>(null);
   const turnCountRef = useRef(0);
   const hasStartedRef = useRef(false);
-  const maxTurns = 10; // Limit the conversation length
 
   useEffect(() => {
     return () => {
