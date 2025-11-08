@@ -41,6 +41,16 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
     };
   }, [mode, isLoading, isThinking, setChatStatus]);
 
+  // Cleanup on unmount: abort any in-flight requests
+  useEffect(() => {
+    return () => {
+      // Abort generation request if any
+      generationControllerRef.current?.abort();
+      // Abort pending start request if any
+      pendingStartRef.current?.controller.abort();
+    };
+  }, []);
+
   const sendAction = useCallback(
     async (action: ActionKey, model: string | null | undefined): Promise<{ aborted: boolean }> => {
       if (!model) {

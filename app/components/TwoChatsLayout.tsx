@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type ChatPanelHandle } from "../helpers/types";
 import { ChatPanel } from "./ChatPanel";
 import { SendButton } from "./SendButton";
@@ -24,7 +24,7 @@ function TwoChatsLayoutContent() {
   const chatA = useRef<ChatPanelHandle | null>(null);
   const chatB = useRef<ChatPanelHandle | null>(null);
   const [isRestarting, setIsRestarting] = useState(false);
-  const { chatStatus } = useModelSelection();
+  const { chatStatus, selectedA, selectedB } = useModelSelection();
   const disableMultipleSending =
     isRestarting ||
     chatStatus.A.isLoading ||
@@ -46,6 +46,31 @@ function TwoChatsLayoutContent() {
       setIsRestarting(false);
     }
   }
+
+  // Cleanup all active processes when component unmounts (page navigation/refresh)
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_OLLAMA_API_KEY || "";
+
+    return () => {
+      // Stop all active models
+      const modelsToStop = [selectedA, selectedB].filter(Boolean) as string[];
+
+      modelsToStop.forEach((model) => {
+        // Fire-and-forget stop requests
+        fetch("/api/ollama", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": apiKey,
+          },
+          body: JSON.stringify({ action: "stop", model }),
+          keepalive: true, // Ensure request completes even after page unload
+        }).catch(() => {
+          // Ignore errors during cleanup
+        });
+      });
+    };
+  }, [selectedA, selectedB]);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
