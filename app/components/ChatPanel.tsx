@@ -1,52 +1,114 @@
 "use client";
 
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import SendButton from "./SendButton";
-import { ActionKey, Message, ModeKey, nextId } from "../helpers/types";
-
-const sendAction = (action: ActionKey, model: string, mode: ModeKey) =>
-  fetch("/api/ollama", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-Key": process.env.NEXT_PUBLIC_OLLAMA_API_KEY || "",
-    },
-    body: JSON.stringify({ action, model, mode }),
-  });
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { SendButton } from "./SendButton";
+import { type ActionKey, type Message } from "../helpers/types";
+import { MODEL_OPTIONS, useModelSelection } from "../contexts/ModelSelectionContext";
+import { getMessage, nextId } from "../helpers/functions";
 
 interface ChatPanelProps {
-  modelOptions: {
-    value: string;
-  }[];
-  defaultModel: string;
   systemPrompt: string;
   userPrompt: string;
-  mode: ModeKey;
+  mode: "A" | "B";
 }
 
-export const ChatPanel = forwardRef(function ChatPanel(
-  {
-    modelOptions,
-    defaultModel,
-    systemPrompt,
-    userPrompt,
-    mode,
-  }: ChatPanelProps,
-  ref
-) {
-  const [selectedModel, setSelectedModel] = useState(defaultModel);
+export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPrompt, mode }: ChatPanelProps, ref) {
+  const { selectedA, selectedB, setSelectedA, setSelectedB, setChatStatus } = useModelSelection();
+  const selectedModel = mode === "A" ? selectedA : selectedB;
+  const setSelectedModel = mode === "A" ? setSelectedA : setSelectedB;
+  const modelOptions = MODEL_OPTIONS;
+
   const [conversation, setConversation] = useState<Message[]>([]);
+  const conversationString = JSON.stringify(conversation);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const sessionRef = useRef(0);
-  const A_B = mode === "primary" ? "A" : "B";
+  // controller for aborting an in-flight generation request
+  const generationControllerRef = useRef<AbortController | null>(null);
+  const pendingStartRef = useRef<{ model: string; controller: AbortController } | null>(null);
 
-  async function send() {
-    const sessionId = sessionRef.current;
-    // prefer typed input; if empty, fall back to the shared user prompt
+  useEffect(() => {
+    setChatStatus((prev) => ({
+      ...prev,
+      [mode]: { isLoading, isThinking },
+    }));
+    return () => {
+      setChatStatus((prev) => ({
+        ...prev,
+        [mode]: { isLoading: false, isThinking: false },
+      }));
+    };
+  }, [mode, isLoading, isThinking, setChatStatus]);
+
+  const sendAction = useCallback(
+    async (action: ActionKey, model: string | null | undefined): Promise<{ aborted: boolean }> => {
+      if (!model) {
+        return { aborted: false };
+      }
+
+      if (action === "stop") {
+        const pending = pendingStartRef.current;
+        if (pending && pending.model === model) {
+          pending.controller.abort();
+          pendingStartRef.current = null;
+          return { aborted: true };
+        }
+      }
+
+      const controller = action === "start" ? new AbortController() : null;
+
+      if (controller) {
+        pendingStartRef.current?.controller.abort();
+        pendingStartRef.current = { model, controller };
+      }
+
+      try {
+        const res = await fetch("/api/ollama", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": process.env.NEXT_PUBLIC_OLLAMA_API_KEY || "",
+          },
+          body: JSON.stringify({ action, model }),
+          signal: controller?.signal,
+        });
+        if (!res.ok) {
+          let errorMessage: string | undefined;
+          try {
+            const data = await res.json();
+            errorMessage = data?.error ?? JSON.stringify(data);
+          } catch {
+            try {
+              errorMessage = await res.text();
+            } catch {
+              errorMessage = undefined;
+            }
+          }
+          throw new Error(errorMessage || `Request failed with status ${res.status}`);
+        }
+        return { aborted: false };
+      } catch (err) {
+        const aborted =
+          !!controller?.signal.aborted ||
+          (err instanceof DOMException && err.name === "AbortError") ||
+          (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError");
+        if (aborted) {
+          return { aborted: true };
+        }
+        throw err;
+      } finally {
+        if (controller && pendingStartRef.current?.controller === controller) {
+          pendingStartRef.current = null;
+        }
+      }
+    },
+    []
+  );
+
+  const send = useCallback(async () => {
+    // prefer typed input, fall back to the shared user prompt if empty
     const trimmed = input.trim() || userPrompt.trim();
-    console.log("Sending message in mode:", mode, selectedModel);
     if (!trimmed || !selectedModel) return;
 
     const userMessage: Message = {
@@ -55,98 +117,152 @@ export const ChatPanel = forwardRef(function ChatPanel(
       content: trimmed,
     };
 
-    const nextConversation = [...conversation, userMessage];
     setConversation((prev) => {
-      if (sessionRef.current !== sessionId) return prev;
-      return nextConversation;
+      const next = [...prev, userMessage];
+      return next;
     });
     setInput("");
-    setIsLoading(true);
     setError(null);
 
     const payloadMessages = [
       { role: "system", content: systemPrompt },
-      ...nextConversation.map(({ role, content }) => ({ role, content })),
+      ...JSON.parse(conversationString || "[]"),
+      userMessage,
     ];
-
+    if (process.env.NODE_ENV !== "production") {
+      console.log("Payload messages:", payloadMessages);
+    }
+    // Abort the previous generation before starting a new one
+    generationControllerRef.current?.abort();
+    const controller = new AbortController();
+    generationControllerRef.current = controller;
+    setIsThinking(true);
+    let streamed = false;
     try {
       const res = await fetch("/api/compare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           model: selectedModel,
           messages: payloadMessages,
-          mode,
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error ?? "Failed to fetch model response.");
+      // If aborted immediately after dispatching, exit quietly
+      if (controller.signal.aborted) {
+        return;
       }
 
-      if (typeof data?.text !== "string") {
-        throw new Error("Model response did not include text output.");
+      // Streaming response handling (text/plain chunks)
+      const contentType = res.headers.get("Content-Type") || "";
+      if (res.ok && contentType.includes("text/plain")) {
+        const assistantMessage: Message = {
+          id: nextId("assistant"),
+          role: "assistant",
+          content: "",
+        };
+        setConversation((prev) => [...prev, assistantMessage]);
+
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let acc = "";
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (controller.signal.aborted) {
+              try {
+                await reader.cancel();
+              } catch {}
+              break; // allow outer finally to run
+            }
+            acc += decoder.decode(value, { stream: true });
+            const latest = acc;
+            setConversation((prev) => prev.map((m) => (m.id === assistantMessage.id ? { ...m, content: latest } : m)));
+          }
+        }
+        streamed = true; // mark streaming handled
       }
 
-      const assistantMessage: Message = {
-        id: nextId("assistant"),
-        role: "assistant",
-        content: data.text,
-      };
-      setConversation((prev) => {
-        if (sessionRef.current !== sessionId) return prev;
-        return [...prev, assistantMessage];
-      });
+      if (!streamed) {
+        // Fallback: JSON response with full text
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data?.error ?? "Failed to fetch model response.");
+        }
+        if (typeof data?.text !== "string") {
+          throw new Error("Model response did not include text output.");
+        }
+        const assistantMessage: Message = {
+          id: nextId("assistant"),
+          role: "assistant",
+          content: data.text,
+        };
+        setConversation((prev) => [...prev, assistantMessage]);
+      }
     } catch (err) {
-      if (sessionRef.current !== sessionId) return;
-      setError(err instanceof Error ? err.message : String(err));
+      const isAbort =
+        (err instanceof DOMException && err.name === "AbortError") ||
+        (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError") ||
+        controller.signal.aborted;
+      if (isAbort) {
+        // user-triggered abort; don't surface as an error
+        return;
+      }
+      setError(getMessage(err));
     } finally {
-      if (sessionRef.current === sessionId) {
-        setIsLoading(false);
+      // Only clear thinking state if this is still the active controller
+      if (generationControllerRef.current === controller) {
+        setIsThinking(false);
       }
     }
-  }
+  }, [conversationString, input, selectedModel, systemPrompt, userPrompt]);
 
-  // expose a simple imperative handle so parent can trigger a send
+  // expose an imperative handle so parent can trigger actions
   useImperativeHandle(
     ref,
     () => ({
       triggerSend: async () => {
+        setConversation([]);
+        setError(null);
+        let abortedStart = false;
         try {
           setIsLoading(true);
-          console.log("Triggering send in mode:", mode, selectedModel);
-          await sendAction("start", selectedModel, mode);
-          void send();
+          const result = await sendAction("start", selectedModel);
+          abortedStart = result.aborted;
         } catch (err) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(getMessage(err));
+          abortedStart = true;
         } finally {
           setIsLoading(false);
         }
+        if (!abortedStart) {
+          send();
+        }
       },
+      isLoading: isLoading,
+      isThinking: isThinking,
       resetSession: async () => {
-        sessionRef.current += 1;
         setConversation([]);
         setInput("");
         setError(null);
-
-        const activeModel = selectedModel;
-        if (!activeModel) {
-          setIsLoading(false);
+        setIsThinking(false);
+        if (!selectedModel) {
           return;
         }
-
         try {
           setIsLoading(true);
-          await sendAction("stop", activeModel, mode);
+          await sendAction("stop", selectedModel);
         } catch (err) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(getMessage(err));
         } finally {
           setIsLoading(false);
         }
       },
     }),
-    [mode, selectedModel]
+    [isLoading, isThinking, selectedModel, send, sendAction]
   );
 
   return (
@@ -154,55 +270,66 @@ export const ChatPanel = forwardRef(function ChatPanel(
       <header className="flex flex-col gap-2 text-center">
         <div className="flex flex-col gap-1">
           <label
-            htmlFor={`model${A_B}`}
-            className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
+            htmlFor={`model${mode}`}
+            className="py-1 tracking-wide text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400"
           >
-            Model {A_B}
+            Model {mode}
           </label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <select
-              id={`model${A_B}`}
+              id={`model${mode}`}
               className="rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-300 dark:border-zinc-700 dark:bg-transparent"
               value={selectedModel}
               onChange={async (e) => {
                 const newModel = e.target.value;
                 const prevModel = selectedModel;
-                // Optimistically update selection
                 setSelectedModel(newModel);
-                setIsLoading(true);
+                setIsThinking(false);
                 setError(null);
                 try {
-                  // stop previous model for this panel's mode
+                  setIsLoading(true);
                   if (prevModel) {
-                    await sendAction("stop", prevModel, mode);
+                    try {
+                      await sendAction("stop", prevModel);
+                    } catch {
+                      console.warn(`Failed to stop previous model ${prevModel}`);
+                    }
                   }
-                  // start new model for this panel's mode
-                  await sendAction("start", newModel, mode);
+                  await sendAction("start", newModel);
                 } catch (err) {
-                  setError(err instanceof Error ? err.message : String(err));
+                  setError(getMessage(err));
                 } finally {
                   setIsLoading(false);
                 }
               }}
               disabled={isLoading}
             >
-              {modelOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.value}
-                </option>
-              ))}
+              {modelOptions.map((option) => {
+                const toLeaveOut =
+                  (mode === "A" && option.value === selectedB) || (mode === "B" && option.value === selectedA);
+                return (
+                  <option key={option.value} value={option.value} disabled={toLeaveOut}>
+                    {option.value}
+                  </option>
+                );
+              })}
             </select>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center">
               <button
-                className="rounded-md border border-zinc-300 px-2 py-1 text-xs"
-                disabled={!isLoading}
+                className="rounded-md border border-zinc-300 px-2 py-1 text-sm disabled:opacity-50"
+                disabled={!selectedModel}
                 onClick={async () => {
                   if (!selectedModel) return;
                   setError(null);
                   try {
-                    await sendAction("stop", selectedModel, mode);
+                    // abort in-flight compare request if any
+                    generationControllerRef.current?.abort();
+                    setIsThinking(false);
+                    await sendAction("stop", selectedModel);
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : String(err));
+                    setError(getMessage(err));
+                  } finally {
+                    setIsLoading(false);
                   }
                 }}
               >
@@ -211,22 +338,14 @@ export const ChatPanel = forwardRef(function ChatPanel(
             </div>
           </div>
         </div>
-        {isLoading && (
-          <span className="text-xs text-emerald-700 dark:text-emerald-400">
-            Running…
-          </span>
-        )}
-        {error && (
-          <div className="rounded-md bg-red-100 px-3 py-2 text-xs text-red-800">
-            {error}
-          </div>
-        )}
+        <span className="text-sm text-emerald-700 dark:text-emerald-400">
+          {isLoading ? "Loading…" : isThinking ? "Responding…" : null}
+        </span>
+        {error && <div className="rounded-md bg-red-100 px-3 py-2 text-xs text-red-800">{error}</div>}
       </header>
 
       <div className="flex-1 space-y-2 overflow-auto rounded-md border border-zinc-100 p-3 dark:border-zinc-800">
-        {conversation.length === 0 && (
-          <div className="text-sm text-zinc-500">No messages yet</div>
-        )}
+        {conversation.length === 0 && <div className="text-sm text-zinc-500">No messages yet</div>}
         {conversation.map((message) => (
           <div
             key={message.id}
@@ -245,22 +364,24 @@ export const ChatPanel = forwardRef(function ChatPanel(
           </div>
         ))}
       </div>
-      <div className="mt-1 flex gap-2">
+      <div className="mt-1 flex gap-3">
         <input
           className="flex-1 rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-300 dark:border-zinc-800 dark:bg-transparent"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Your query"
-          disabled={isLoading}
+          disabled={isLoading || isThinking}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              send();
+              if (!isLoading && !isThinking) {
+                send();
+              }
             }
           }}
         />
-        <SendButton onClick={send} disabled={isLoading || !selectedModel}>
-          Send
+        <SendButton onClick={send} disabled={isLoading || isThinking || !selectedModel}>
+          {isThinking ? "Generating…" : "Send"}
         </SendButton>
       </div>
     </section>
