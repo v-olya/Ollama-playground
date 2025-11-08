@@ -7,7 +7,7 @@ export const metadata = {
 export default function ComparePage() {
   return (
     <>
-      <h1 className="mx-auto text-2xl font-semibold text-center">Compare Ollama models side-by-side</h1>
+      <h1 className="mx-auto text-3xl font-extrabold text-center">Compare Ollama models side-by-side</h1>
       <main>
         <TwoChatsLayout />
       </main>

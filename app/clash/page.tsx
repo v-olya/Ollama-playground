@@ -103,12 +103,9 @@ export default function Page() {
 
   return (
     <>
-      <h1 className="mx-auto text-2xl font-semibold text-center mb-12">Explore AI-to-AI interactions</h1>
+      <h1 className="mx-auto text-3xl font-extrabold text-center mb-12">Explore AI-to-AI interactions</h1>
       <div className="flex gap-4 justify-center">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="modelA" className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">
-            Model A
-          </label>
+        <div className="flex flex-col gap-1 text-right">
           <SelectWithDisabled
             id="modelA"
             value={selectedModelA}
@@ -116,10 +113,7 @@ export default function Page() {
             disabledOption={selectedModelB}
           />
         </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="modelB" className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">
-            Model B
-          </label>
+        <div className="flex flex-col gap-1 text-right">
           <SelectWithDisabled
             id="modelB"
             value={selectedModelB}

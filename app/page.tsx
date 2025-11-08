@@ -2,13 +2,16 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-6 py-16 bg-white text-slate-900">
+    <main className="flex flex-col items-center justify-center px-6 py-6 bg-white text-slate-900">
       <header className="text-center mb-8 max-w-2xl">
-        <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight mb-4">Play with Ollama models</h1>
+        <h1 className="text-3xl sm:text-4xl font-extrabold leading-tight mb-4">
+          Play with Ollama models, <br />
+          <small>both local and cloud</small>
+        </h1>
         <p className="text-lg text-slate-600 mb-1">
           Compare models against the same prompt or explore AI-to-AI interactions.
         </p>
-        <p className="text-sm text-slate-500">
+        <p className="text-slate-500">
           You may choose{" "}
           <span className="inline-block">
             🤝 <strong>Collaborative</strong>
