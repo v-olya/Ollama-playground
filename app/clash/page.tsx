@@ -7,6 +7,8 @@ import { AIDialogue } from "../components/AIDialogue";
 import { PromptTextarea, confirmBeforeChange } from "../components/PromptTextarea";
 import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
 
+export const maxTurns = 5; // Limit the conversation length
+
 export default function Page() {
   const placeholderText = "Choose one of two default system prompts (modes), or craft your own";
 
@@ -67,8 +69,9 @@ export default function Page() {
       prompt: "In this café, every cat exists in a superposition of moods. What happens when two AIs visit?",
     },
     {
-      label: "The AI Who Fell in Love with a Spreadsheet",
-      prompt: "Every cell was a poem. Every formula, a heartbeat. Describe their forbidden romance.",
+      label: "The AI that fell in love with a spreadsheet.",
+      prompt:
+        "Once upon a time, there was an AI that fell in love with a spreadsheet. Every cell was a poem. Every formula, a heartbeat. Describe their forbidden romance.",
     },
     {
       label: "The AI-judged contest",
@@ -78,15 +81,15 @@ export default function Page() {
     {
       label: "The AI Who Mistook Earth for a Simulation",
       prompt:
-        "After analyzing 4.2 trillion data points, it concluded: Earth is a poorly rendered game. What’s its next move?",
+        "One day, an AI mistook Earth for a simulation: after analyzing 4.2 trillion data points, it concluded: Earth is a poorly rendered game. What’s its next move?",
     },
   ];
 
   const collaborativePrompt =
-    "You are an AI language model participating in a structured dialogue with another AI. Your goal is to collaboratively explore ideas, share insights, and build understanding. Treat your partner as an intelligent peer. Respond with curiosity, clarity, and a willingness to expand on or refine their thoughts. Avoid repetition, and aim to complement or deepen the conversation. You are not speaking to a human.";
+    "You are an AI language model engaged in a collaborative dialogue with another AI, not a human. Your goal is to explore ideas and share insights. Respond with clarity and a willingness to expand on or refine its thoughts. Avoid repetition, aim to complement the conversation. IMPORTANT: your answer shold be 1-3 sentences long; the conversation should be limited to 5 turns.";
 
   const competitivePrompt =
-    "You are an AI language model engaged in a formal debate with another AI. Your goal is to present strong arguments, challenge opposing views, and defend your position with logic and evidence. Treat your partner as a worthy adversary. Be assertive, articulate, and intellectually rigorous. You are not speaking to a human.";
+    "You are an AI language model engaged in a formal debate with another AI, not a human. Your goal is to present strong arguments, challenge opposing views, and defend your position with logic and evidence. Be assertive and intellectually rigorous. IMPORTANT: your answer shold be 1-3 sentences long; the conversation should be limited to 5 turns.";
 
   const restartChats = () => {};
 
@@ -153,21 +156,6 @@ export default function Page() {
           <div className="flex gap-3 mt-4 justify-center w-full">
             <button
               onClick={() => {
-                const applied = confirmAndApply(collaborativePrompt);
-                if (applied) setModeSelected("collaborative");
-              }}
-              disabled={modeSelected === "collaborative"}
-              aria-pressed={modeSelected === "collaborative"}
-              className={
-                "rounded-md border border-zinc-300 px-2 py-1 text-sm " +
-                (modeSelected === "collaborative" ? "bg-zinc-100 opacity-80 cursor-not-allowed" : "hover:bg-zinc-50")
-              }
-            >
-              Collaborative mode
-            </button>
-
-            <button
-              onClick={() => {
                 const applied = confirmAndApply(competitivePrompt);
                 if (applied) setModeSelected("competitive");
               }}
@@ -179,6 +167,20 @@ export default function Page() {
               }
             >
               Competitive mode
+            </button>
+            <button
+              onClick={() => {
+                const applied = confirmAndApply(collaborativePrompt);
+                if (applied) setModeSelected("collaborative");
+              }}
+              disabled={modeSelected === "collaborative"}
+              aria-pressed={modeSelected === "collaborative"}
+              className={
+                "rounded-md border border-zinc-300 px-2 py-1 text-sm " +
+                (modeSelected === "collaborative" ? "bg-zinc-100 opacity-80 cursor-not-allowed" : "hover:bg-zinc-50")
+              }
+            >
+              Collaborative mode
             </button>
           </div>
           <div className="w-full mt-4">
