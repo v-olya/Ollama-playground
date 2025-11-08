@@ -71,6 +71,23 @@ export function isModelPulled(model: string): boolean {
   return pulledModels.includes(model);
 }
 
+export function stopModel(model: string): "skipped" | "stopped" | "failed" {
+  if (!isModelPulled(model)) {
+    return "skipped";
+  }
+
+  const stop = spawnSync("ollama", ["stop", model], {
+    stdio: "inherit",
+    env: process.env,
+  });
+
+  if (stop.error || stop.status !== 0) {
+    return "failed";
+  }
+
+  return "stopped";
+}
+
 export async function GET() {
   try {
     return NextResponse.json(getPulledModels());
@@ -124,15 +141,13 @@ export async function POST(request: Request) {
     }
 
     // (action === "stop")
+    console.log("Stopping model:", model);
     try {
-      if (!isModelPulled(model)) {
+      const result = stopModel(model);
+      if (result === "skipped") {
         return NextResponse.json({ stop: "ignored, not found" });
       }
-      const stop = spawnSync("ollama", ["stop", model], {
-        stdio: "inherit",
-        env: process.env,
-      });
-      if (stop.error || stop.status !== 0) {
+      if (result === "failed") {
         return NextResponse.json({ stopped: false });
       }
       return NextResponse.json({ stopped: true });
