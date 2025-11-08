@@ -28,25 +28,20 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.svg" sizes="any" />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <div className="min-h-screen">
           <nav className="mx-auto max-w-6xl flex items-center justify-start space-x-4 border-b border-zinc-200 bg-white/60 backdrop-blur-sm px-4 py-3 dark:border-zinc-800 dark:bg-black/60">
-            <a
-              href="https://github.com/v-olya/olla"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="nav-link"
-            >
+            <a href="https://github.com/v-olya/olla" target="_blank" rel="noopener noreferrer" className="nav-link">
               GitHub Repo
             </a>
-
+            <Link href="/" className="nav-link">
+              Home
+            </Link>
             <Link href="/compare" className="nav-link">
               Compare
             </Link>
 
-            <Link href="/playground" className="nav-link">
+            <Link href="/clash" className="nav-link">
               Clash
             </Link>
           </nav>
