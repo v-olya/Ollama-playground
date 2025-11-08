@@ -32,6 +32,14 @@ function TwoChatsLayoutContent() {
     chatStatus.B.isLoading ||
     chatStatus.B.isThinking;
 
+  // Track current models for cleanup on unmount
+  const currentModelsRef = useRef<{ A: string | null; B: string | null }>({ A: null, B: null });
+
+  // Keep the ref in sync with selected models
+  useEffect(() => {
+    currentModelsRef.current = { A: selectedA, B: selectedB };
+  }, [selectedA, selectedB]);
+
   async function restartChats() {
     if (isRestarting) return;
     setIsRestarting(true);
@@ -52,8 +60,9 @@ function TwoChatsLayoutContent() {
     const apiKey = process.env.NEXT_PUBLIC_OLLAMA_API_KEY || "";
 
     return () => {
-      // Stop all active models
-      const modelsToStop = [selectedA, selectedB].filter(Boolean) as string[];
+      // Stop all active models (using ref to avoid re-running on every change)
+      const { A: modelA, B: modelB } = currentModelsRef.current;
+      const modelsToStop = [modelA, modelB].filter(Boolean) as string[];
 
       modelsToStop.forEach((model) => {
         // Fire-and-forget stop requests
@@ -70,7 +79,7 @@ function TwoChatsLayoutContent() {
         });
       });
     };
-  }, [selectedA, selectedB]);
+  }, []); // Only run on mount/unmount
 
   return (
     <div className="mx-auto w-full max-w-6xl p-6">
