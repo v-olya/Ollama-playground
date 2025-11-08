@@ -5,6 +5,7 @@ import { SendButton } from "../components/SendButton";
 import { SelectWithDisabled } from "../components/SelectWithDisabled";
 import { AIDialogue } from "../components/AIDialogue";
 import { PromptTextarea, confirmBeforeChange } from "../components/PromptTextarea";
+import Tooltip from "../components/Tooltip";
 import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
 
 export const maxTurns = 5; // Limit the conversation length
@@ -130,14 +131,14 @@ export default function Page() {
           <h2 className="text-xl font-extrabold mb-2">⚔️ Debate topics</h2>
           <nav className="flex flex-col">
             {left.map((it) => (
-              <button
-                key={it.label}
-                title={it.prompt}
-                onClick={() => setUserPrompt(it.prompt)}
-                className="text-left bg-transparent border-0 p-0 text-black font-bold my-2 cursor-pointer text-sm"
-              >
-                {it.label}
-              </button>
+              <Tooltip key={it.label} content={it.prompt}>
+                <button
+                  onClick={() => setUserPrompt(it.prompt)}
+                  className="text-left bg-transparent border-0 p-0 text-black font-bold my-2 cursor-pointer text-sm"
+                >
+                  {it.label}
+                </button>
+              </Tooltip>
             ))}
           </nav>
         </aside>
@@ -166,7 +167,7 @@ export default function Page() {
                 (modeSelected === "competitive" ? "bg-zinc-100 opacity-80 cursor-not-allowed" : "hover:bg-zinc-50")
               }
             >
-              Competitive mode
+              ⚔️ Competitive mode
             </button>
             <button
               onClick={() => {
@@ -180,7 +181,7 @@ export default function Page() {
                 (modeSelected === "collaborative" ? "bg-zinc-100 opacity-80 cursor-not-allowed" : "hover:bg-zinc-50")
               }
             >
-              Collaborative mode
+              🤝 Collaborative mode
             </button>
           </div>
           <div className="w-full mt-4">
@@ -227,14 +228,14 @@ export default function Page() {
           <h2 className="text-xl font-extrabold mb-2">🤝 Storytelling</h2>
           <nav className="flex flex-col">
             {right.map((it) => (
-              <button
-                key={it.label}
-                title={it.prompt}
-                onClick={() => setUserPrompt(it.prompt)}
-                className="text-left bg-transparent border-0 p-0 text-black font-bold my-2 cursor-pointer text-sm"
-              >
-                {it.label}
-              </button>
+              <Tooltip key={it.label} content={it.prompt}>
+                <button
+                  onClick={() => setUserPrompt(it.prompt)}
+                  className="text-left bg-transparent border-0 p-0 text-black font-bold my-2 cursor-pointer text-sm"
+                >
+                  {it.label}
+                </button>
+              </Tooltip>
             ))}
           </nav>
         </aside>
