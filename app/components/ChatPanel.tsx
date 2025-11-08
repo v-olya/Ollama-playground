@@ -43,9 +43,13 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
       if (action === "stop") {
         const pending = pendingStartRef.current;
         if (pending && pending.model === model) {
-          pending.controller.abort();
+          const alreadyAborted = pending.controller.signal.aborted;
+          if (!alreadyAborted) {
+            pending.controller.abort();
+            pendingStartRef.current = null;
+            return { aborted: true };
+          }
           pendingStartRef.current = null;
-          return { aborted: true };
         }
       }
 
@@ -117,14 +121,18 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   useEffect(() => {
     return () => {
       generationControllerRef.current?.abort();
-      pendingStartRef.current?.controller.abort();
-
-      // Only send stop request if a model is actually running (not just loading)
+      if (pendingStartRef.current) {
+        pendingStartRef.current.controller.abort();
+        pendingStartRef.current = null;
+      }
+      // FE should still dispatch "stop" to cover the gap where the server never saw a /compare run
+      // Only send a request if a model is actually running (to save keep-alive requests)
       const modelToStop = runningModelRef.current;
       if (modelToStop) {
         sendAction("stop", modelToStop, { keepalive: true }).catch(() => {
           // Ignore errors during cleanup
         });
+        runningModelRef.current = null;
       }
     };
   }, [sendAction]);
@@ -293,6 +301,9 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         } catch (err) {
           setError(getMessage(err));
         } finally {
+          if (runningModelRef.current === selectedModel) {
+            runningModelRef.current = null;
+          }
           setIsLoading(false);
         }
       },
@@ -324,6 +335,9 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
                   if (prevModel) {
                     try {
                       await sendAction("stop", prevModel);
+                      if (runningModelRef.current === prevModel) {
+                        runningModelRef.current = null;
+                      }
                     } catch {
                       console.warn(`Failed to stop previous model ${prevModel}`);
                     }
@@ -353,6 +367,9 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
                   } catch (err) {
                     setError(getMessage(err));
                   } finally {
+                    if (runningModelRef.current === selectedModel) {
+                      runningModelRef.current = null;
+                    }
                     setIsLoading(false);
                   }
                 }}
