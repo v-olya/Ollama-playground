@@ -27,31 +27,15 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   // controller for aborting a generation request
   const generationControllerRef = useRef<AbortController | null>(null);
   const pendingStartRef = useRef<{ model: string; controller: AbortController } | null>(null);
-
-  useEffect(() => {
-    setChatStatus((prev) => ({
-      ...prev,
-      [mode]: { isLoading, isThinking },
-    }));
-    return () => {
-      setChatStatus((prev) => ({
-        ...prev,
-        [mode]: { isLoading: false, isThinking: false },
-      }));
-    };
-  }, [mode, isLoading, isThinking, setChatStatus]);
-
-  // Cleanup on unmount: abort any in-flight requests
-  useEffect(() => {
-    return () => {
-      generationControllerRef.current?.abort();
-      pendingStartRef.current?.controller.abort();
-      // Note: Model stopping is handled at the parent level (TwoChatsLayout)
-    };
-  }, [mode]);
+  // Track which model is actually running (not just loading)
+  const runningModelRef = useRef<string | null>(null);
 
   const sendAction = useCallback(
-    async (action: ActionKey, model: string | null | undefined): Promise<{ aborted: boolean }> => {
+    async (
+      action: ActionKey,
+      model: string | null | undefined,
+      options?: { keepalive?: boolean }
+    ): Promise<{ aborted: boolean }> => {
       if (!model) {
         return { aborted: false };
       }
@@ -81,6 +65,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
           },
           body: JSON.stringify({ action, model }),
           signal: controller?.signal,
+          keepalive: options?.keepalive,
         });
         if (!res.ok) {
           let errorMessage: string | undefined;
@@ -115,6 +100,35 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
     []
   );
 
+  useEffect(() => {
+    setChatStatus((prev) => ({
+      ...prev,
+      [mode]: { isLoading, isThinking },
+    }));
+    return () => {
+      setChatStatus((prev) => ({
+        ...prev,
+        [mode]: { isLoading: false, isThinking: false },
+      }));
+    };
+  }, [mode, isLoading, isThinking, setChatStatus]);
+
+  // Cleanup on unmount: abort any in-flight requests and stop the model
+  useEffect(() => {
+    return () => {
+      generationControllerRef.current?.abort();
+      pendingStartRef.current?.controller.abort();
+
+      // Only send stop request if a model is actually running (not just loading)
+      const modelToStop = runningModelRef.current;
+      if (modelToStop) {
+        sendAction("stop", modelToStop, { keepalive: true }).catch(() => {
+          // Ignore errors during cleanup
+        });
+      }
+    };
+  }, [sendAction]);
+
   const send = useCallback(async () => {
     // prefer typed input, fall back to the shared user prompt if empty
     const trimmed = input.trim() || userPrompt.trim();
@@ -140,6 +154,8 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
       if (result.aborted) {
         return;
       }
+      // Model is now loaded and ready
+      runningModelRef.current = selectedModel;
     } catch (err) {
       setError(getMessage(err));
       return;
