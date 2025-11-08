@@ -1,43 +1,38 @@
 import { NextResponse } from "next/server";
-import "dotenv/config";
-import { ChatOllama } from "@langchain/ollama";
+import { isModelPulled } from "../ollama/route";
+import { getMessage } from "@/app/helpers/functions";
+
+// Per-model replace-in-flight gate: latest wins
+const activeByModel = new Map<
+  string,
+  {
+    controller: AbortController;
+  }
+>();
 
 type IncomingMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
 
-function toLangChainMessage(message: IncomingMessage) {
-  const content = message.content ?? "";
-  switch (message.role) {
-    case "system":
-      return { _getType: () => "system", content };
-    case "assistant":
-      return { _getType: () => "ai", content };
-    default:
-      return { _getType: () => "human", content };
-  }
-}
-
 export async function GET() {
-  // No default prompts are provided here since they come from the frontend
   return NextResponse.json({});
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => {
-      console.error("no body");
+      console.warn("No response body");
     });
 
     const model = typeof body.model === "string" ? body.model.trim() : "";
-    if (!model || typeof body.mode !== "string") {
-      return NextResponse.json(
-        { error: "Model is required." },
-        { status: 400 }
-      );
+    if (!model) {
+      return NextResponse.json({ error: "Model is required." }, { status: 400 });
     }
-    // Messages must be provided by the frontend
+    if (!isModelPulled(model)) {
+      return NextResponse.json({ error: "Model is not pulled yet." }, { status: 400 });
+    }
+    // Messages are provided by FE
     const rawMessages: IncomingMessage[] = Array.isArray(body.messages)
       ? body.messages
           .map((msg: IncomingMessage) => ({
@@ -47,28 +42,178 @@ export async function POST(request: Request) {
           .filter((msg: IncomingMessage) => msg.content.length > 0)
       : [];
 
-    // Ensure we have at least a system and user message
     if (!rawMessages.length) {
-      return NextResponse.json(
-        { error: "Messages are required." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Messages are required." }, { status: 400 });
+    }
+    // Direct Ollama REST streaming
+    const baseUrl = (process.env["BASE_URL"]?.trim() || "localhost:11434").replace(/\/$/, "");
+    const upstreamHeaders: Record<string, string> = { "Content-Type": "application/json" };
+
+    if (process.env.NEXT_PUBLIC_OLLAMA_API_KEY?.trim()) {
+      upstreamHeaders["X-API-Key"] = process.env.NEXT_PUBLIC_OLLAMA_API_KEY.trim();
     }
 
-    const messages = rawMessages.map(toLangChainMessage);
+    // Abort any existing run for this model key
+    const key = `${baseUrl}|${model}`;
+    const prev = activeByModel.get(key);
+    try {
+      prev?.controller.abort();
+    } catch {}
 
-    const chat = new ChatOllama({
-      model,
-      baseUrl: process.env["BASE_URL"]?.trim() + ":11434",
+    // Create a controller and tie it to request.abort
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    request.signal.addEventListener("abort", onAbort);
+    activeByModel.set(key, { controller });
+
+    // Overall timeout for upstream call
+    const timeoutMs = Number(45000);
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
+
+    const upstream = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: upstreamHeaders,
+      signal: (() => {
+        // Merge request-driven and timeout-driven aborts
+        const merged = new AbortController();
+        const onAbort1 = () => merged.abort();
+        const onAbort2 = () => merged.abort();
+        controller.signal.addEventListener("abort", onAbort1);
+        timeoutController.signal.addEventListener("abort", onAbort2);
+        // Clean up listeners when merged aborts
+        merged.signal.addEventListener("abort", () => {
+          controller.signal.removeEventListener("abort", onAbort1);
+          timeoutController.signal.removeEventListener("abort", onAbort2);
+        });
+        return merged.signal;
+      })(),
+      body: JSON.stringify({
+        model,
+        messages: rawMessages,
+        stream: true,
+      }),
     });
-    const response = await chat._generate(messages, {});
-    const text = response.generations[0]?.text ?? "";
-    return NextResponse.json({ text });
+
+    clearTimeout(timeoutId);
+
+    if (!upstream.body) {
+      return NextResponse.json({ error: "No upstream stream" }, { status: 502 });
+    }
+
+    if (!upstream.ok) {
+      const errTxt = await upstream.text().catch(() => "");
+      return NextResponse.json({ error: errTxt || `Upstream error ${upstream.status}` }, { status: 502 });
+    }
+
+    const encoder = new TextEncoder();
+    const reader = upstream.body.getReader();
+    let buffer = "";
+
+    const stream = new ReadableStream<Uint8Array>({
+      async pull(streamController) {
+        if (controller.signal.aborted) {
+          try {
+            await reader.cancel();
+          } catch {}
+          streamController.close();
+          return;
+        }
+        if (request.signal.aborted) {
+          try {
+            await reader.cancel();
+          } catch {}
+          streamController.close();
+          return;
+        }
+        // Inactivity timeout per-chunk
+        const chunkTimeoutMs = Number(20000);
+        const chunkTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+          try {
+            controller.abort();
+          } catch {}
+        }, chunkTimeoutMs);
+        const { done, value } = await reader.read();
+        if (chunkTimer) clearTimeout(chunkTimer);
+        if (done) {
+          streamController.close();
+          return;
+        }
+        buffer += new TextDecoder().decode(value, { stream: true });
+        // Ollama sends NDJSON; split on newlines
+        const lines = buffer.split(/\r?\n/);
+        // Keep last line in buffer
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          type OllamaStreamChunk = {
+            message?: { content?: string };
+            response?: string; // for /api/generate shape
+            done?: boolean;
+            error?: string;
+          };
+          let json: OllamaStreamChunk | undefined;
+          try {
+            json = JSON.parse(trimmed);
+          } catch {
+            continue; // skip malformed line
+          }
+          if (json?.error) {
+            streamController.enqueue(encoder.encode(`\n[error] ${json.error}`));
+            continue;
+          }
+          if (json?.done) {
+            streamController.close();
+            return;
+          }
+          // Prefer chat delta under message.content; fall back to generate delta
+          const chatDelta = json?.message?.content;
+          const genDelta = json?.response;
+          const delta = typeof chatDelta === "string" ? chatDelta : typeof genDelta === "string" ? genDelta : "";
+          if (delta) streamController.enqueue(encoder.encode(delta));
+        }
+      },
+      async cancel() {
+        try {
+          await reader.cancel();
+        } catch {}
+        try {
+          controller.abort();
+        } catch {}
+      },
+    });
+
+    const response = new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Transfer-Encoding": "chunked",
+      },
+    });
+
+    // when response finishes or if the controller is superseded
+    const cleanup = () => {
+      request.signal.removeEventListener("abort", onAbort);
+      const entry = activeByModel.get(key);
+      if (entry?.controller === controller) {
+        activeByModel.delete(key);
+      }
+    };
+    Promise.resolve().finally(cleanup);
+    return response;
   } catch (err) {
     console.error("Error in /api/compare:", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    // If the request was aborted, surface a distinct status for the FE
+    if (
+      (err instanceof DOMException && err.name === "AbortError") ||
+      (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError")
+    ) {
+      // 499 (Client Closed Request)
+      // client will receive it if only its connection is still open,
+      // i.e.the request was aborted by the Server, not by the Client itself
+      return NextResponse.json({ error: "aborted" }, { status: 499 });
+    }
+    return NextResponse.json({ error: getMessage(err) }, { status: 500 });
   }
 }
