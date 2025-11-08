@@ -2,8 +2,10 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { SendButton } from "./SendButton";
+import { SelectWithDisabled } from "./SelectWithDisabled";
+import { ConversationDisplay } from "./ConversationDisplay";
 import { type ActionKey, type Message } from "../helpers/types";
-import { MODEL_OPTIONS, useModelSelection } from "../contexts/ModelSelectionContext";
+import { useModelSelection } from "../contexts/ModelSelectionContext";
 import { getMessage, nextId } from "../helpers/functions";
 
 interface ChatPanelProps {
@@ -16,7 +18,6 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   const { selectedA, selectedB, setSelectedA, setSelectedB, setChatStatus } = useModelSelection();
   const selectedModel = mode === "A" ? selectedA : selectedB;
   const setSelectedModel = mode === "A" ? setSelectedA : setSelectedB;
-  const modelOptions = MODEL_OPTIONS;
 
   const [conversation, setConversation] = useState<Message[]>([]);
   const conversationString = JSON.stringify(conversation);
@@ -286,12 +287,10 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
             Model {mode}
           </label>
           <div className="flex items-center gap-3">
-            <select
+            <SelectWithDisabled
               id={`model${mode}`}
-              className="rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-300 dark:border-zinc-700 dark:bg-transparent"
               value={selectedModel}
-              onChange={async (e) => {
-                const newModel = e.target.value;
+              onChange={async (newModel) => {
                 const prevModel = selectedModel;
                 setSelectedModel(newModel);
                 setIsThinking(false);
@@ -313,17 +312,8 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
                 }
               }}
               disabled={isLoading}
-            >
-              {modelOptions.map((option) => {
-                const toLeaveOut =
-                  (mode === "A" && option.value === selectedB) || (mode === "B" && option.value === selectedA);
-                return (
-                  <option key={option.value} value={option.value} disabled={toLeaveOut}>
-                    {option.value}
-                  </option>
-                );
-              })}
-            </select>
+              disabledOption={mode === "A" ? selectedB : selectedA}
+            />
             <div className="flex items-center">
               <button
                 className="rounded-md border border-zinc-300 px-2 py-1 text-sm disabled:opacity-50"
@@ -354,26 +344,8 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         {error && <div className="rounded-md bg-red-100 px-3 py-2 text-xs text-red-800">{error}</div>}
       </header>
 
-      <div className="flex-1 space-y-2 overflow-auto rounded-md border border-zinc-100 p-3 dark:border-zinc-800">
-        {conversation.length === 0 && <div className="text-sm text-zinc-500">No messages yet</div>}
-        {conversation.map((message) => (
-          <div
-            key={message.id}
-            className={
-              message.role === "assistant"
-                ? "rounded-md bg-zinc-100 p-2 text-left text-zinc-900 dark:bg-zinc-900 dark:text-zinc-50"
-                : message.role === "system"
-                ? "rounded-md bg-zinc-200/60 p-2 text-left text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100"
-                : "rounded-md bg-zinc-50 p-2 text-left text-zinc-900 dark:bg-[#111] dark:text-zinc-200"
-            }
-          >
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
-              {message.role}
-            </div>
-            <div className="whitespace-pre-wrap text-sm">{message.content}</div>
-          </div>
-        ))}
-      </div>
+      <ConversationDisplay conversation={conversation} />
+
       <div className="mt-1 flex gap-3">
         <input
           className="flex-1 rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-300 dark:border-zinc-800 dark:bg-transparent"
