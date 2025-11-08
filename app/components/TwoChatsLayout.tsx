@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { type ChatPanelHandle } from "../helpers/types";
 import { ChatPanel } from "./ChatPanel";
 import { SendButton } from "./SendButton";
@@ -24,21 +24,13 @@ function TwoChatsLayoutContent() {
   const chatA = useRef<ChatPanelHandle | null>(null);
   const chatB = useRef<ChatPanelHandle | null>(null);
   const [isRestarting, setIsRestarting] = useState(false);
-  const { chatStatus, selectedA, selectedB } = useModelSelection();
+  const { chatStatus } = useModelSelection();
   const disableMultipleSending =
     isRestarting ||
     chatStatus.A.isLoading ||
     chatStatus.A.isThinking ||
     chatStatus.B.isLoading ||
     chatStatus.B.isThinking;
-
-  // Track current models for cleanup on unmount
-  const currentModelsRef = useRef<{ A: string | null; B: string | null }>({ A: null, B: null });
-
-  // Keep the ref in sync with selected models
-  useEffect(() => {
-    currentModelsRef.current = { A: selectedA, B: selectedB };
-  }, [selectedA, selectedB]);
 
   async function restartChats() {
     if (isRestarting) return;
@@ -54,32 +46,6 @@ function TwoChatsLayoutContent() {
       setIsRestarting(false);
     }
   }
-
-  // Cleanup all active processes when component unmounts (page navigation/refresh)
-  useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_OLLAMA_API_KEY || "";
-
-    return () => {
-      // Stop all active models (using ref to avoid re-running on every change)
-      const { A: modelA, B: modelB } = currentModelsRef.current;
-      const modelsToStop = [modelA, modelB].filter(Boolean) as string[];
-
-      modelsToStop.forEach((model) => {
-        // Fire-and-forget stop requests
-        fetch("/api/ollama", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": apiKey,
-          },
-          body: JSON.stringify({ action: "stop", model }),
-          keepalive: true, // Ensure request completes even after page unload
-        }).catch(() => {
-          // Ignore errors during cleanup
-        });
-      });
-    };
-  }, []); // Only run on mount/unmount
 
   return (
     <div className="mx-auto w-full max-w-6xl p-6">
