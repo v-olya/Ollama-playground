@@ -5,6 +5,11 @@
 - **ESLint**: Linting for consistent code.
 - **Ollama Integration**: Scripts for managing Ollama services.
 
+## Prerequisites
+
+- **Ollama**: This project requires the Ollama CLI to be installed and running locally.
+  Downloads are available at https://ollama.com/download. After installation, you should sign up https://signin.ollama.com/, create the API key, set it as NextJS public environmental variable.
+
 ## Installation
 
 1. Clone the repository:
