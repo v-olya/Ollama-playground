@@ -66,7 +66,7 @@ function TwoChatsLayoutContent() {
           }}
           disabled={disableMultipleSending}
         >
-          Send to all
+          Send to both
         </SendButton>
       </div>
 

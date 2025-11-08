@@ -338,7 +338,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
             </div>
           </div>
         </div>
-        <span className="text-sm text-emerald-700 dark:text-emerald-400">
+        <span className="text-sm text-sky-700 dark:text-sky-400">
           {isLoading ? "Loading…" : isThinking ? "Responding…" : null}
         </span>
         {error && <div className="rounded-md bg-red-100 px-3 py-2 text-xs text-red-800">{error}</div>}
