@@ -20,7 +20,6 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   const setSelectedModel = mode === "A" ? setSelectedA : setSelectedB;
 
   const [conversation, setConversation] = useState<Message[]>([]);
-  const conversationString = JSON.stringify(conversation);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
@@ -45,9 +44,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   // Cleanup on unmount: abort any in-flight requests
   useEffect(() => {
     return () => {
-      // Abort generation request if any
       generationControllerRef.current?.abort();
-      // Abort pending start request if any
       pendingStartRef.current?.controller.abort();
     };
   }, []);
@@ -135,11 +132,21 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
     setInput("");
     setError(null);
 
-    const payloadMessages = [
-      { role: "system", content: systemPrompt },
-      ...JSON.parse(conversationString || "[]"),
-      userMessage,
-    ];
+    // Check and pull (if needed) before sending
+    try {
+      setIsLoading(true);
+      const result = await sendAction("start", selectedModel);
+      if (result.aborted) {
+        return;
+      }
+    } catch (err) {
+      setError(getMessage(err));
+      return;
+    } finally {
+      setIsLoading(false);
+    }
+
+    const payloadMessages = [{ role: "system", content: systemPrompt }, ...conversation, userMessage];
     if (process.env.NODE_ENV !== "production") {
       console.log("Payload messages:", payloadMessages);
     }
@@ -229,7 +236,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         setIsThinking(false);
       }
     }
-  }, [conversationString, input, selectedModel, systemPrompt, userPrompt]);
+  }, [conversation, input, selectedModel, systemPrompt, userPrompt, sendAction]);
 
   // expose an imperative handle so parent can trigger actions
   useImperativeHandle(
