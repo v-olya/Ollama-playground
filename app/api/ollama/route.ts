@@ -141,7 +141,6 @@ export async function POST(request: Request) {
     }
 
     // (action === "stop")
-    console.log("Stopping model:", model);
     try {
       const result = stopModel(model);
       if (result === "skipped") {
