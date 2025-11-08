@@ -8,7 +8,7 @@ import { PromptTextarea, confirmBeforeChange } from "../components/PromptTextare
 import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
 
 export default function Page() {
-  const placeholderText = "Choose one of two default system prompts, or craft your own.";
+  const placeholderText = "Choose one of two default system prompts (modes), or craft your own";
 
   const [systemPrompt, setSystemPrompt] = useState("");
   const [userPrompt, setUserPrompt] = useState("");
