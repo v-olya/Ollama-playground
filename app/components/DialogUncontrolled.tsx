@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ConversationLayout } from "./ConversationLayout";
 import { secondaryButtonClass } from "./buttonClasses";
 import { type Message } from "../helpers/types";
@@ -15,6 +15,7 @@ interface DialogueUncontrolledProps {
   modelB: string;
   maxRounds: number;
   onClose?: () => void;
+  onCompleteChange?: (isComplete: boolean) => void;
 }
 
 type StreamEvent = {
@@ -32,6 +33,7 @@ export function DialogueUncontrolled({
   modelB,
   maxRounds,
   onClose,
+  onCompleteChange,
 }: DialogueUncontrolledProps) {
   const [conversation, setConversation] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -48,16 +50,143 @@ export function DialogueUncontrolled({
   const pullControllerRef = useRef<AbortController | null>(null);
   const currentMessageIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    startDialogue();
+  const handleStreamEvent = useCallback(
+    (event: StreamEvent) => {
+      switch (event.type) {
+        case "turn-start":
+          if (event.speaker && event.turn) {
+            setCurrentSpeaker(event.speaker);
+            setCurrentTurn(event.turn);
 
-    return () => {
-      if (controllerRef.current) controllerRef.current.abort();
-      if (pullControllerRef.current) pullControllerRef.current.abort();
-    };
-  }, []);
+            if (!currentMessageIdRef.current) {
+              const msgId = nextId("assistant");
+              currentMessageIdRef.current = msgId;
 
-  const startDialogue = async () => {
+              const newMessage: Message = {
+                id: msgId,
+                role: "assistant",
+                content: "",
+              };
+
+              setConversation((prev) => [...prev, newMessage]);
+            }
+          }
+          break;
+
+        case "delta":
+          if (event.content && currentMessageIdRef.current) {
+            const msgId = currentMessageIdRef.current;
+            setConversation((prev) =>
+              prev.map((msg) => (msg.id === msgId ? { ...msg, content: msg.content + event.content } : msg))
+            );
+          }
+          break;
+
+        case "turn-end":
+          if (event.turn) {
+            setCompletedTurns(event.turn);
+            setCompletedRounds(Math.ceil(event.turn / 2));
+          }
+          currentMessageIdRef.current = null;
+          setCurrentSpeaker(null);
+          break;
+
+        case "complete":
+          setIsComplete(true);
+          setIsStreaming(false);
+          setCurrentSpeaker(null);
+          onCompleteChange?.(true);
+          break;
+
+        case "error":
+          if (event.error) {
+            setError(event.error);
+          }
+          setIsStreaming(false);
+          setCurrentSpeaker(null);
+          onCompleteChange?.(false);
+          break;
+      }
+    },
+    [onCompleteChange]
+  );
+
+  const runClashDialogue = useCallback(
+    async (rounds: number, startTurn: number) => {
+      const controller = new AbortController();
+      controllerRef.current = controller;
+
+      setIsStreaming(true);
+      setError(null);
+
+      try {
+        const response = await fetch("/api/clash", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            modelA,
+            modelB,
+            systemPrompt,
+            userPrompt,
+            maxRounds: rounds,
+            startFromTurn: startTurn,
+          }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data?.error ?? "Failed to start dialogue");
+        }
+
+        if (!response.body) {
+          throw new Error("No response stream");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+
+            try {
+              const event: StreamEvent = JSON.parse(trimmed);
+              handleStreamEvent(event);
+            } catch (parseErr) {
+              console.warn("Failed to parse event:", trimmed, parseErr);
+            }
+          }
+        }
+      } catch (err) {
+        const isAbort =
+          (err instanceof DOMException && err.name === "AbortError") ||
+          (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError") ||
+          controller.signal.aborted;
+
+        if (!isAbort) {
+          setError(getMessage(err));
+        }
+      } finally {
+        setIsStreaming(false);
+        setCurrentSpeaker(null);
+        controllerRef.current = null;
+      }
+    },
+    [handleStreamEvent, modelA, modelB, systemPrompt, userPrompt]
+  );
+
+  const startDialogue = useCallback(async () => {
     setConversation([]);
     setError(null);
     setCurrentSpeaker(null);
@@ -67,6 +196,7 @@ export function DialogueUncontrolled({
     setAllowedRounds(maxRounds);
     setIsStreaming(false);
     setIsComplete(false);
+    onCompleteChange?.(false);
     setIsLoading(true);
     currentMessageIdRef.current = null;
 
@@ -135,135 +265,16 @@ export function DialogueUncontrolled({
 
     setConversation([userMessage]);
     await runClashDialogue(maxRounds, 1);
-  };
+  }, [maxRounds, modelA, modelB, onCompleteChange, runClashDialogue, userPrompt]);
 
-  const runClashDialogue = async (rounds: number, startTurn: number) => {
-    const controller = new AbortController();
-    controllerRef.current = controller;
+  useEffect(() => {
+    startDialogue();
 
-    setIsStreaming(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/clash", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          modelA,
-          modelB,
-          systemPrompt,
-          userPrompt,
-          maxRounds: rounds,
-          startFromTurn: startTurn,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data?.error ?? "Failed to start dialogue");
-      }
-
-      if (!response.body) {
-        throw new Error("No response stream");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-
-          try {
-            const event: StreamEvent = JSON.parse(trimmed);
-            handleStreamEvent(event);
-          } catch (parseErr) {
-            console.warn("Failed to parse event:", trimmed);
-          }
-        }
-      }
-    } catch (err) {
-      const isAbort =
-        (err instanceof DOMException && err.name === "AbortError") ||
-        (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError") ||
-        controller.signal.aborted;
-
-      if (!isAbort) {
-        setError(getMessage(err));
-      }
-    } finally {
-      setIsStreaming(false);
-      setCurrentSpeaker(null);
-      controllerRef.current = null;
-    }
-  };
-
-  const handleStreamEvent = (event: StreamEvent) => {
-    switch (event.type) {
-      case "turn-start":
-        if (event.speaker && event.turn) {
-          setCurrentSpeaker(event.speaker);
-          setCurrentTurn(event.turn);
-
-          if (!currentMessageIdRef.current) {
-            const msgId = nextId("assistant");
-            currentMessageIdRef.current = msgId;
-
-            const newMessage: Message = {
-              id: msgId,
-              role: "assistant",
-              content: "",
-            };
-
-            setConversation((prev) => [...prev, newMessage]);
-          }
-        }
-        break;
-
-      case "delta":
-        if (event.content && currentMessageIdRef.current) {
-          const msgId = currentMessageIdRef.current;
-          setConversation((prev) =>
-            prev.map((msg) => (msg.id === msgId ? { ...msg, content: msg.content + event.content } : msg))
-          );
-        }
-        break;
-
-      case "turn-end":
-        if (event.turn) {
-          setCompletedTurns(event.turn);
-          setCompletedRounds(Math.ceil(event.turn / 2));
-        }
-        currentMessageIdRef.current = null;
-        setCurrentSpeaker(null);
-        break;
-
-      case "complete":
-        setIsComplete(true);
-        setIsStreaming(false);
-        setCurrentSpeaker(null);
-        break;
-
-      case "error":
-        if (event.error) {
-          setError(event.error);
-        }
-        setIsStreaming(false);
-        setCurrentSpeaker(null);
-        break;
-    }
-  };
+    return () => {
+      if (controllerRef.current) controllerRef.current.abort();
+      if (pullControllerRef.current) pullControllerRef.current.abort();
+    };
+  }, [startDialogue]);
 
   const handleStop = () => {
     if (pullControllerRef.current) pullControllerRef.current.abort();
@@ -271,12 +282,14 @@ export function DialogueUncontrolled({
     setIsStreaming(false);
     setIsLoading(false);
     setCurrentSpeaker(null);
+    onCompleteChange?.(false);
   };
 
   const handleContinue = () => {
     const newAllowedRounds = allowedRounds + maxRounds;
     setAllowedRounds(newAllowedRounds);
     setIsComplete(false);
+    onCompleteChange?.(false);
     runClashDialogue(newAllowedRounds, completedTurns + 1);
   };
 
@@ -292,6 +305,7 @@ export function DialogueUncontrolled({
     setIsComplete(false);
     setAllowedRounds(maxRounds);
     currentMessageIdRef.current = null;
+    onCompleteChange?.(false);
 
     startDialogue();
   };
@@ -300,6 +314,7 @@ export function DialogueUncontrolled({
     if (pullControllerRef.current) pullControllerRef.current.abort();
     if (controllerRef.current) controllerRef.current.abort();
 
+    onCompleteChange?.(false);
     onClose?.();
   };
 

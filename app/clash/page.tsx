@@ -4,11 +4,12 @@ import { useState } from "react";
 import { SendButton } from "../components/SendButton";
 import { SelectWithDisabled } from "../components/SelectWithDisabled";
 import { DialogueUncontrolled } from "../components/DialogUncontrolled";
-import { PromptTextarea, confirmBeforeChange } from "../components/PromptTextarea";
+import { PromptTextarea } from "../components/PromptTextarea";
 import Tooltip from "../components/Tooltip";
 import { secondaryButtonClass, selectedModeClass } from "../components/buttonClasses";
 import SwapButton from "../components/SwapButton";
 import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
+import { confirmBeforeChange } from "../helpers/functions";
 
 export const maxRounds = 3; // Each round = both models respond (A then B)
 
@@ -21,11 +22,14 @@ export default function Page() {
   const [modeSelected, setModeSelected] = useState<"collaborative" | "competitive" | null>(null);
   const [selectedModelA, setSelectedModelA] = useState(MODEL_OPTIONS[0].value);
   const [selectedModelB, setSelectedModelB] = useState(MODEL_OPTIONS[1].value);
+  const [chatSession, setChatSession] = useState(0); // to remount DialogueUncontrolled
+  const [isChatComplete, setIsChatComplete] = useState(false);
 
   const handleSystemPromptChange = (newPrompt: string) => {
     setSystemPrompt(newPrompt);
     setIsSystemCommitted(false);
     setModeSelected(null);
+    setIsChatComplete(false);
   };
 
   const left = [
@@ -92,18 +96,44 @@ export default function Page() {
 
   const competitivePrompt = `You are an AI language model engaged in a formal debate with another AI, not a human. Be assertive and intellectually rigorous. Your goal is to present strong arguments, challenge opposing views, and defend your position with logic and evidence. IMPORTANT: your answer shold be 1-2 sentences long; the conversation will be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
 
-  const restartChats = () => {};
+  const startChat = () => {
+    if (!systemPrompt.trim().length || !userPrompt.trim().length) return;
+    if (isSystemCommitted && !isChatComplete) return;
+    setIsChatComplete(false);
+    setIsSystemCommitted(true);
+    setChatSession((prev) => prev + 1);
+  };
 
   const confirmAndApply = (newPrompt: string): boolean => {
     if (!isSystemCommitted) {
       handleSystemPromptChange(newPrompt);
       return true;
     }
-    const ok = confirmBeforeChange(restartChats);
+    const ok = confirmBeforeChange(() => {
+      setIsSystemCommitted(false);
+      setIsChatComplete(false);
+    });
     if (!ok) return false;
     handleSystemPromptChange(newPrompt);
     return true;
   };
+
+  const makeModelChangeHandler = (setter: (value: string) => void) => (value: string) => {
+    if (!isSystemCommitted) {
+      setter(value);
+      return;
+    }
+    const ok = confirmBeforeChange(() => {
+      setIsSystemCommitted(false);
+      setIsChatComplete(false);
+    });
+    if (!ok) return;
+    setter(value);
+  };
+
+  const handleModelAChange = makeModelChangeHandler(setSelectedModelA);
+  const handleModelBChange = makeModelChangeHandler(setSelectedModelB);
+  const promptsLocked = isSystemCommitted && !isChatComplete;
 
   return (
     <>
@@ -113,7 +143,7 @@ export default function Page() {
           <SelectWithDisabled
             id="modelA"
             value={selectedModelA}
-            onChange={setSelectedModelA}
+            onChange={handleModelAChange}
             disabledOption={selectedModelB}
           />
         </div>
@@ -122,7 +152,17 @@ export default function Page() {
           <SwapButton
             className="p-2"
             onClick={() => {
-              const ok = confirmBeforeChange(restartChats);
+              if (!isSystemCommitted) {
+                const a = selectedModelA;
+                const b = selectedModelB;
+                setSelectedModelA(b);
+                setSelectedModelB(a);
+                return;
+              }
+              const ok = confirmBeforeChange(() => {
+                setIsSystemCommitted(false);
+                setIsChatComplete(false);
+              });
               if (!ok) return;
               const a = selectedModelA;
               const b = selectedModelB;
@@ -136,7 +176,7 @@ export default function Page() {
           <SelectWithDisabled
             id="modelB"
             value={selectedModelB}
-            onChange={setSelectedModelB}
+            onChange={handleModelBChange}
             disabledOption={selectedModelA}
           />
         </div>
@@ -148,8 +188,15 @@ export default function Page() {
             {left.map((it) => (
               <Tooltip key={it.label} content={it.prompt} className="tooltips">
                 <button
-                  onClick={() => setUserPrompt(it.prompt)}
-                  className="text-left bg-transparent border-0 p-0 text-black font-bold my-2 cursor-pointer text-sm"
+                  type="button"
+                  onClick={() => {
+                    if (promptsLocked) return;
+                    setUserPrompt(it.prompt);
+                  }}
+                  aria-disabled={promptsLocked || undefined}
+                  className={`text-left bg-transparent border-0 p-0 text-black font-bold my-2 text-sm transition-opacity ${
+                    promptsLocked ? "opacity-60 pointer-events-none" : "cursor-pointer"
+                  }`}
                 >
                   {it.label}
                 </button>
@@ -164,7 +211,7 @@ export default function Page() {
               label="System prompt"
               value={systemPrompt}
               onChange={handleSystemPromptChange}
-              restartChats={() => {}}
+              disabled={promptsLocked}
               placeholder={placeholderText}
               confirmOnBlur={isSystemCommitted}
             />
@@ -201,21 +248,21 @@ export default function Page() {
             <PromptTextarea
               label="User prompt"
               value={userPrompt}
-              onChange={(v) => setUserPrompt(v)}
-              restartChats={() => {}}
+              onChange={setUserPrompt}
+              disabled={promptsLocked}
               placeholder="Type or click a side prompt to populate this field"
               confirmOnBlur={false}
             />
           </div>
           <div className="w-full mt-4 text-center">
             <SendButton
-              disabled={!systemPrompt.trim().length || !userPrompt.trim().length}
-              onClick={() => {
-                setIsSystemCommitted(true);
-              }}
+              disabled={!systemPrompt.trim().length || !userPrompt.trim().length || promptsLocked}
+              onClick={startChat}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
-                  setIsSystemCommitted(true);
+                  if (promptsLocked) return;
+                  e.preventDefault();
+                  startChat();
                 }
               }}
             >
@@ -226,12 +273,17 @@ export default function Page() {
           {isSystemCommitted && (
             <div className="w-full mt-6">
               <DialogueUncontrolled
+                key={chatSession}
                 systemPrompt={systemPrompt}
                 userPrompt={userPrompt}
                 modelA={selectedModelA}
                 modelB={selectedModelB}
                 maxRounds={maxRounds}
-                onClose={() => setIsSystemCommitted(false)}
+                onClose={() => {
+                  setIsSystemCommitted(false);
+                  setIsChatComplete(false);
+                }}
+                onCompleteChange={setIsChatComplete}
               />
             </div>
           )}
@@ -243,8 +295,15 @@ export default function Page() {
             {right.map((it) => (
               <Tooltip key={it.label} content={it.prompt} className="tooltips">
                 <button
-                  onClick={() => setUserPrompt(it.prompt)}
-                  className="text-left bg-transparent border-0 p-0 text-black font-bold my-2 cursor-pointer text-sm"
+                  type="button"
+                  onClick={() => {
+                    if (promptsLocked) return;
+                    setUserPrompt(it.prompt);
+                  }}
+                  aria-disabled={promptsLocked || undefined}
+                  className={`text-left bg-transparent border-0 p-0 text-black font-bold my-2 text-sm transition-opacity ${
+                    promptsLocked ? "cursor-not-allowed opacity-60 pointer-events-none" : "cursor-pointer"
+                  }`}
                 >
                   {it.label}
                 </button>

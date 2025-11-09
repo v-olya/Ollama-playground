@@ -1,25 +1,18 @@
 "use client";
 
 import { FocusEvent, useRef, useEffect, type ChangeEvent } from "react";
+import { confirmBeforeChange } from "../helpers/functions";
 
 interface PromptTextareaProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  restartChats: () => void;
+  restartChats?: () => void;
+  disabled?: boolean;
   placeholder?: string;
   className?: string;
   // When false, skip the before-change confirmation on blur
   confirmOnBlur?: boolean;
-}
-
-export function confirmBeforeChange(restartChats: () => void) {
-  const confirmed = window.confirm(
-    "If you modify the prompt, the current chat will be restarted.\n Are you sure you want to restart?"
-  );
-  if (!confirmed) return false;
-  restartChats();
-  return true;
 }
 
 export function PromptTextarea({
@@ -27,11 +20,15 @@ export function PromptTextarea({
   value,
   onChange,
   restartChats,
+  disabled = false,
   placeholder,
   confirmOnBlur = true,
 }: PromptTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const dirtyCalledRef = useRef(false);
+  const baseTextareaClass =
+    "min-h-10 w-full rounded-md border border-zinc-200 p-2 text-sm outline-none focus:ring-2 focus:ring-sky-300 dark:border-zinc-800 dark:bg-transparent";
+  const textareaClass = disabled ? `${baseTextareaClass} cursor-not-allowed opacity-70` : baseTextareaClass;
 
   const handleBeforeChange = () => {
     if (confirmOnBlur === false) return true;
@@ -39,6 +36,7 @@ export function PromptTextarea({
   };
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    if (disabled) return;
     // Store the value that should be displayed in the ::after pseudo-element (for the textarea height to be unlimited)
     if (e.target.parentElement) {
       e.target.parentElement.dataset.clonedVal = e.target.value;
@@ -59,6 +57,7 @@ export function PromptTextarea({
     }
   }, [value]);
   const handleBlur = (e: FocusEvent) => {
+    if (disabled) return;
     const textarea = e.target as HTMLTextAreaElement;
     // If the user didn't interact (no onChange fired), skip confirmation.
     if (!dirtyCalledRef.current) return;
@@ -98,9 +97,12 @@ export function PromptTextarea({
       >
         <textarea
           ref={textareaRef}
-          className="min-h-10 w-full rounded-md border border-zinc-200 p-2 text-sm outline-none focus:ring-2 focus:ring-sky-300 dark:border-zinc-800 dark:bg-transparent"
           defaultValue={value}
           placeholder={placeholder}
+          readOnly={disabled}
+          aria-disabled={disabled || undefined}
+          tabIndex={disabled ? -1 : undefined}
+          className={textareaClass}
           onChange={handleChange}
           onBlur={handleBlur}
         />
