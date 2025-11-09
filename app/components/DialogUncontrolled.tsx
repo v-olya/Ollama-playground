@@ -5,6 +5,8 @@ import { ConversationLayout } from "./ConversationLayout";
 import { secondaryButtonClass } from "./buttonClasses";
 import { type Message } from "../helpers/types";
 import { getMessage, nextId } from "../helpers/functions";
+import Link from "next/link";
+import { primaryButtonBase } from "./buttonClasses";
 
 interface DialogueUncontrolledProps {
   systemPrompt: string;
@@ -306,6 +308,16 @@ export function DialogueUncontrolled({
   const canStop = isStreaming || isLoading;
   const canReset = !isStreaming && !isLoading && conversation.length;
 
+  const CallJudge = () => {
+    return isComplete && conversation.length ? (
+      <div className="w-full mt-3 mb-2 text-center">
+        <Link href="/judge" className={`${primaryButtonBase} bg-red-800`}>
+          Call the judge
+        </Link>
+      </div>
+    ) : null;
+  };
+
   return (
     <section className="flex w-full flex-col gap-3 rounded-md border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-[#0b0b0b]">
       <header className="flex flex-col gap-2 text-center">
@@ -331,6 +343,7 @@ export function DialogueUncontrolled({
             </button>
           </div>
         </div>
+        {CallJudge()}
         <span className="text-sm text-sky-700 dark:text-sky-400">
           {isLoading
             ? "Pulling models..."
@@ -348,6 +361,7 @@ export function DialogueUncontrolled({
       </header>
 
       <ConversationLayout conversation={conversation} useModelLabels={true} labelA="Model A" labelB="Model B" />
+      {CallJudge()}
     </section>
   );
 }
