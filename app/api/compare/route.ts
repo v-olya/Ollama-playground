@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { isModelPulled, stopModel } from "../ollama/route";
 import { getMessage } from "@/app/helpers/functions";
+import { ensureModelStopped, isModelPulled } from "../ollama/utils";
 
 // Per-model replace-in-flight gate: latest wins
 const activeByModel = new Map<
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     }
   };
 
-  const stopAndCleanup = (reason: string) => {
+  const stopAndCleanup = async (reason: string) => {
     if (!model) {
       cleanup();
       return;
@@ -72,10 +72,17 @@ export async function POST(request: Request) {
     if (!stopIssued) {
       stopIssued = true;
       console.log(`Auto-stopping model after ${reason}:`, model);
-      const outcome = stopModel(model);
-      if (outcome === "failed") {
-        console.warn(`Failed to stop model "${model}" after ${reason}.`);
+      try {
+        const outcome = await ensureModelStopped(model);
+        if (outcome === "failed") {
+          console.warn(`Failed to stop model "${model}" after ${reason}.`);
+        }
+      } catch (err) {
+        console.warn(`Failed to stop model "${model}" after ${reason}:`, err);
+      } finally {
+        cleanup();
       }
+      return;
     }
 
     cleanup();
@@ -123,11 +130,13 @@ export async function POST(request: Request) {
     // Create a controller and tie it to request.abort
     controller = new AbortController();
     const controllerRef = controller;
-    onControllerAbort = () => stopAndCleanup("abort");
+    onControllerAbort = () => {
+      void stopAndCleanup("abort");
+    };
     controllerRef.signal.addEventListener("abort", onControllerAbort);
 
     onRequestAbort = () => {
-      stopAndCleanup("abort");
+      void stopAndCleanup("abort");
       controllerRef.abort();
     };
     request.signal.addEventListener("abort", onRequestAbort);
@@ -139,7 +148,7 @@ export async function POST(request: Request) {
     timeoutController = new AbortController();
     const timeoutControllerRef = timeoutController;
     onTimeoutAbort = () => {
-      stopAndCleanup("timeout");
+      void stopAndCleanup("timeout");
       try {
         controllerRef.abort();
       } catch {}
@@ -197,7 +206,7 @@ export async function POST(request: Request) {
           try {
             await reader.cancel();
           } catch {}
-          stopAndCleanup("abort");
+          await stopAndCleanup("abort");
           streamController.close();
           return;
         }
@@ -205,7 +214,7 @@ export async function POST(request: Request) {
           try {
             await reader.cancel();
           } catch {}
-          stopAndCleanup("abort");
+          await stopAndCleanup("abort");
           streamController.close();
           return;
         }
@@ -219,7 +228,7 @@ export async function POST(request: Request) {
         const { done, value } = await reader.read();
         if (chunkTimer) clearTimeout(chunkTimer);
         if (done) {
-          stopAndCleanup("completion");
+          await stopAndCleanup("completion");
           streamController.close();
           return;
         }
@@ -248,7 +257,7 @@ export async function POST(request: Request) {
             continue;
           }
           if (json?.done) {
-            stopAndCleanup("completion");
+            await stopAndCleanup("completion");
             streamController.close();
             return;
           }
@@ -266,7 +275,7 @@ export async function POST(request: Request) {
         try {
           controllerRef.abort();
         } catch {}
-        stopAndCleanup("cancel");
+        await stopAndCleanup("cancel");
       },
     });
 
@@ -290,13 +299,13 @@ export async function POST(request: Request) {
     }
 
     if (isAborted) {
-      stopAndCleanup("exception");
+      await stopAndCleanup("exception");
       // 499 (Client Closed Request)
       // client will receive it if only its connection is still open,
       // i.e.the request was aborted by the Server, not by the Client itself
       return NextResponse.json({ error: "aborted" }, { status: 499 });
     }
-    stopAndCleanup("error");
+    await stopAndCleanup("error");
     return NextResponse.json({ error: getMessage(err) }, { status: 500 });
   }
 }

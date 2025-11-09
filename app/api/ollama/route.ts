@@ -1,7 +1,8 @@
 import { getMessage } from "@/app/helpers/functions";
 import { type ActionKey } from "@/app/helpers/types";
 import { NextResponse } from "next/server";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
+import { ensureModelStopped, getPulledModels, isModelPulled } from "./utils";
 
 async function pullModelWithAbort(model: string, signal: AbortSignal) {
   if (signal.aborted) {
@@ -41,51 +42,6 @@ async function pullModelWithAbort(model: string, signal: AbortSignal) {
       });
     });
   });
-}
-
-export function getPulledModels(): string[] {
-  const models: string[] = [];
-  const list = spawnSync("ollama", ["list"], {
-    encoding: "utf8",
-    env: process.env,
-  });
-  const raw = !list.error && typeof list.stdout === "string" ? list.stdout : "";
-  // parse list output by extracting model-name-like tokens from each line
-  if (raw) {
-    const lines = raw.split(/\r?\n/);
-    for (const line of lines) {
-      // skip header-like lines
-      if (!line.trim() || (line.toLowerCase().includes("name") && line.toLowerCase().includes("id"))) continue;
-      const match = line.match(/[A-Za-z0-9_\-:.]+/g);
-      if (match?.length) {
-        // assume first token is the model name
-        models.push(match[0]);
-      }
-    }
-  }
-  return models;
-}
-
-export function isModelPulled(model: string): boolean {
-  const pulledModels = getPulledModels();
-  return pulledModels.includes(model);
-}
-
-export function stopModel(model: string): "skipped" | "stopped" | "failed" {
-  if (!isModelPulled(model)) {
-    return "skipped";
-  }
-
-  const stop = spawnSync("ollama", ["stop", model], {
-    stdio: "inherit",
-    env: process.env,
-  });
-
-  if (stop.error || stop.status !== 0) {
-    return "failed";
-  }
-
-  return "stopped";
 }
 
 export async function GET() {
@@ -142,7 +98,7 @@ export async function POST(request: Request) {
 
     // (action === "stop")
     try {
-      const result = stopModel(model);
+      const result = await ensureModelStopped(model);
       if (result === "skipped") {
         return NextResponse.json({ stop: "ignored, not found" });
       }

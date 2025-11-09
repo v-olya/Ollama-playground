@@ -27,7 +27,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   // controller for aborting a generation request
   const generationControllerRef = useRef<AbortController | null>(null);
   const pendingStartRef = useRef<{ model: string; controller: AbortController } | null>(null);
-  // Track which model is actually running (not just loading)
+  // Track if the model is actually running (not just loading)
   const runningModelRef = useRef<string | null>(null);
 
   const sendAction = useCallback(
@@ -139,7 +139,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
 
   const send = useCallback(async () => {
     const runModel = selectedModel;
-    // prefer typed input, fall back to the shared user prompt if empty
+    // prefer hand-typed input, fall back to the shared user prompt if empty
     const trimmed = input.trim() || userPrompt.trim();
     if (!trimmed || !runModel) return;
 
@@ -176,7 +176,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
     if (process.env.NODE_ENV !== "production") {
       console.log("Payload messages:", payloadMessages);
     }
-    // Abort the previous generation before starting a new one
+    // Abort the previous generation before start
     generationControllerRef.current?.abort();
     const controller = new AbortController();
     generationControllerRef.current = controller;
@@ -193,7 +193,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         }),
       });
 
-      // If aborted immediately after dispatching, exit quietly
+      // If aborted immediately, exit silently
       if (controller.signal.aborted) {
         return;
       }
@@ -227,7 +227,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
             setConversation((prev) => prev.map((m) => (m.id === assistantMessage.id ? { ...m, content: latest } : m)));
           }
         }
-        streamed = true; // mark streaming handled
+        streamed = true; // streaming handled
       }
 
       if (!streamed) {
