@@ -5,6 +5,7 @@ export type PanelMode = "A" | "B";
 export type PanelStatus = {
   isLoading: boolean;
   isThinking: boolean;
+  hasHistory: boolean;
 };
 
 type ModelSelection = {
@@ -60,8 +61,8 @@ export function ModelSelectionProvider({ children }: { children: React.ReactNode
   const [selectedA, setSelectedA] = useState(MODEL_OPTIONS[0].value);
   const [selectedB, setSelectedB] = useState(MODEL_OPTIONS[1].value);
   const [chatStatus, setChatStatus] = useState<Record<PanelMode, PanelStatus>>({
-    A: { isLoading: false, isThinking: false },
-    B: { isLoading: false, isThinking: false },
+    A: { isLoading: false, isThinking: false, hasHistory: false },
+    B: { isLoading: false, isThinking: false, hasHistory: false },
   });
 
   return (

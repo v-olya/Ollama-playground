@@ -7,7 +7,7 @@ import { ConversationLayout } from "./ConversationLayout";
 import { type ActionKey, type Message } from "../helpers/types";
 import { useModelSelection } from "../contexts/ModelSelectionContext";
 import { getMessage, nextId } from "../helpers/functions";
-import { secondaryButtonClass } from "./buttonClasses";
+import { secondaryButtonClass } from "../helpers/buttonClasses";
 
 interface ChatPanelProps {
   systemPrompt: string;
@@ -108,15 +108,15 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   useEffect(() => {
     setChatStatus((prev) => ({
       ...prev,
-      [mode]: { isLoading, isThinking },
+      [mode]: { isLoading, isThinking, hasHistory: conversation.length },
     }));
     return () => {
       setChatStatus((prev) => ({
         ...prev,
-        [mode]: { isLoading: false, isThinking: false },
+        [mode]: { isLoading: false, isThinking: false, hasHistory: false },
       }));
     };
-  }, [mode, isLoading, isThinking, setChatStatus]);
+  }, [mode, isLoading, isThinking, conversation.length, setChatStatus]);
 
   // Cleanup on unmount: abort any in-flight requests and stop the model
   useEffect(() => {
