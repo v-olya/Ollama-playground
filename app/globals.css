@@ -49,3 +49,12 @@ body {
     background: rgba(255, 255, 255, 0.06);
   }
 }
+
+.tooltips {
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  border: 2px solid rgba(20, 20, 20, 0.08);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.02));
+  outline: 1px rgba(20, 20, 20, 0.06);
+  outline-offset: 2px;
+}

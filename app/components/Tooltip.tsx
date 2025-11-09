@@ -10,7 +10,6 @@ type Props = {
 };
 
 export function Tooltip({ content, children, position = "top", className }: Props) {
-  // Keeps pointer-events off the tooltip, so it doesn't interfere with pointer targeting of the child element.
   const positionClasses = {
     top: "bottom-full mb-2 left-1/2 -translate-x-1/2",
     bottom: "top-full mt-2 left-1/2 -translate-x-1/2",

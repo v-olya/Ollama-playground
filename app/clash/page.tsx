@@ -6,6 +6,7 @@ import { SelectWithDisabled } from "../components/SelectWithDisabled";
 import { DialogueUncontrolled } from "../components/DialogUncontrolled";
 import { PromptTextarea, confirmBeforeChange } from "../components/PromptTextarea";
 import Tooltip from "../components/Tooltip";
+import { secondaryButtonClass, selectedModeClass } from "../components/buttonClasses";
 import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
 
 export const maxRounds = 3; // Each round = both models respond (A then B)
@@ -70,7 +71,7 @@ export default function Page() {
       prompt: "In this café, every cat exists in a superposition of moods. What happens when two AIs visit?",
     },
     {
-      label: "The AI that fell in love with a spreadsheet.",
+      label: "The AI that fell in love with a spreadsheet",
       prompt:
         "Once upon a time, there was an AI that fell in love with a spreadsheet. Every cell was a poem. Every formula, a heartbeat. Describe their forbidden romance.",
     },
@@ -129,7 +130,7 @@ export default function Page() {
           <h2 className="text-xl font-extrabold mb-2">⚔️ Debate topics</h2>
           <nav className="flex flex-col">
             {left.map((it) => (
-              <Tooltip key={it.label} content={it.prompt}>
+              <Tooltip key={it.label} content={it.prompt} className="tooltips">
                 <button
                   onClick={() => setUserPrompt(it.prompt)}
                   className="text-left bg-transparent border-0 p-0 text-black font-bold my-2 cursor-pointer text-sm"
@@ -160,10 +161,9 @@ export default function Page() {
               }}
               disabled={modeSelected === "competitive"}
               aria-pressed={modeSelected === "competitive"}
-              className={
-                "rounded-md border border-zinc-300 px-2 py-1 text-sm " +
-                (modeSelected === "competitive" ? "bg-zinc-100 opacity-80 cursor-not-allowed" : "hover:bg-zinc-50")
-              }
+              className={`${secondaryButtonClass} text-sm ${
+                modeSelected === "competitive" ? selectedModeClass : "hover:cursor-pointer"
+              }`}
             >
               ⚔️ Competitive mode
             </button>
@@ -174,10 +174,9 @@ export default function Page() {
               }}
               disabled={modeSelected === "collaborative"}
               aria-pressed={modeSelected === "collaborative"}
-              className={
-                "rounded-md border border-zinc-300 px-2 py-1 text-sm " +
-                (modeSelected === "collaborative" ? "bg-zinc-100 opacity-80 cursor-not-allowed" : "hover:bg-zinc-50")
-              }
+              className={`${secondaryButtonClass} text-sm ${
+                modeSelected === "collaborative" ? selectedModeClass : "hover:cursor-pointer"
+              }`}
             >
               🤝 Collaborative mode
             </button>
@@ -226,7 +225,7 @@ export default function Page() {
           <h2 className="text-xl font-extrabold mb-2">🤝 Storytelling</h2>
           <nav className="flex flex-col">
             {right.map((it) => (
-              <Tooltip key={it.label} content={it.prompt}>
+              <Tooltip key={it.label} content={it.prompt} className="tooltips">
                 <button
                   onClick={() => setUserPrompt(it.prompt)}
                   className="text-left bg-transparent border-0 p-0 text-black font-bold my-2 cursor-pointer text-sm"

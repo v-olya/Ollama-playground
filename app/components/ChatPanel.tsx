@@ -7,6 +7,7 @@ import { ConversationLayout } from "./ConversationLayout";
 import { type ActionKey, type Message } from "../helpers/types";
 import { useModelSelection } from "../contexts/ModelSelectionContext";
 import { getMessage, nextId } from "../helpers/functions";
+import { secondaryButtonClass } from "./buttonClasses";
 
 interface ChatPanelProps {
   systemPrompt: string;
@@ -359,13 +360,12 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
             />
             <div className="flex items-center">
               <button
-                className="rounded-md border border-zinc-300 px-2 py-1 text-sm disabled:opacity-50"
+                className={secondaryButtonClass}
                 disabled={!selectedModel}
                 onClick={async () => {
                   if (!selectedModel) return;
                   setError(null);
                   try {
-                    // abort in-flight compare request if any
                     generationControllerRef.current?.abort();
                     setIsThinking(false);
                     await sendAction("stop", selectedModel);

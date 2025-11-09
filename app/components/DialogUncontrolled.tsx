@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ConversationLayout } from "./ConversationLayout";
+import { secondaryButtonClass } from "./buttonClasses";
 import { type Message } from "../helpers/types";
 import { getMessage, nextId } from "../helpers/functions";
 
@@ -306,32 +307,24 @@ export function DialogueUncontrolled({
   const canReset = !isStreaming && !isLoading && conversation.length;
 
   return (
-    <section className="flex h-[500px] w-full flex-col gap-3 rounded-md border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-[#0b0b0b]">
+    <section className="flex w-full flex-col gap-3 rounded-md border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-[#0b0b0b]">
       <header className="flex flex-col gap-2 text-center">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
-            AI-to-AI Dialogue
-          </h3>
+          <h3 className="text-sm font-semibold tracking-wide text-zinc-700 dark:text-zinc-300">AI-to-AI Dialogue</h3>
           <div className="flex gap-2">
             {canContinue && (
-              <button
-                onClick={handleContinue}
-                className="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-              >
+              <button onClick={handleContinue} className={secondaryButtonClass}>
                 Continue... (+{maxRounds} rounds)
               </button>
             )}
             {canRestart && (
-              <button
-                onClick={handleRestart}
-                className="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-              >
+              <button onClick={handleRestart} className={secondaryButtonClass}>
                 Restart
               </button>
             )}
             <button
               onClick={canStop ? handleStop : handleReset}
-              className="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className={secondaryButtonClass}
               disabled={!canStop && !canReset}
             >
               {canStop ? "Stop" : "Reset"}
