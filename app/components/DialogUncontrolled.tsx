@@ -4,95 +4,126 @@ import { useState, useRef, useEffect } from "react";
 import { ConversationLayout } from "./ConversationLayout";
 import { type Message } from "../helpers/types";
 import { getMessage, nextId } from "../helpers/functions";
-import { maxTurns } from "../clash/page";
 
 interface DialogueUncontrolledProps {
   systemPrompt: string;
   userPrompt: string;
   modelA: string;
   modelB: string;
-  isActive: boolean;
+  maxRounds: number;
+  onClose?: () => void;
 }
+
+type StreamEvent = {
+  type: "turn-start" | "delta" | "turn-end" | "complete" | "error";
+  speaker?: "A" | "B";
+  content?: string;
+  turn?: number;
+  error?: string;
+};
 
 export function DialogueUncontrolled({
   systemPrompt,
   userPrompt,
   modelA,
   modelB,
-  isActive,
+  maxRounds,
+  onClose,
 }: DialogueUncontrolledProps) {
   const [conversation, setConversation] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isThinking, setIsThinking] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentSpeaker, setCurrentSpeaker] = useState<"A" | "B" | null>(null);
+  const [currentTurn, setCurrentTurn] = useState(0);
+  const [completedTurns, setCompletedTurns] = useState(0);
+  const [completedRounds, setCompletedRounds] = useState(0);
+  const [allowedRounds, setAllowedRounds] = useState(maxRounds);
+  const [isComplete, setIsComplete] = useState(false);
+
   const controllerRef = useRef<AbortController | null>(null);
-  const turnCountRef = useRef(0);
-  const hasStartedRef = useRef(false);
+  const pullControllerRef = useRef<AbortController | null>(null);
+  const currentMessageIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    startDialogue();
+
     return () => {
-      controllerRef.current?.abort();
+      if (controllerRef.current) controllerRef.current.abort();
+      if (pullControllerRef.current) pullControllerRef.current.abort();
     };
   }, []);
-
-  useEffect(() => {
-    if (isActive && !hasStartedRef.current && userPrompt.trim()) {
-      hasStartedRef.current = true;
-      startDialogue();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive]);
 
   const startDialogue = async () => {
     setConversation([]);
     setError(null);
-    turnCountRef.current = 0;
-    setIsThinking(false);
     setCurrentSpeaker(null);
+    setCurrentTurn(0);
+    setCompletedTurns(0);
+    setCompletedRounds(0);
+    setAllowedRounds(maxRounds);
+    setIsStreaming(false);
+    setIsComplete(false);
     setIsLoading(true);
+    currentMessageIdRef.current = null;
 
-    // First, ensure both models are pulled
+    const pullController = new AbortController();
+    pullControllerRef.current = pullController;
+
     try {
-      // Check and pull Model A if needed
-      const resA = await fetch("/api/ollama", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": process.env.NEXT_PUBLIC_OLLAMA_API_KEY || "",
-        },
-        body: JSON.stringify({ action: "start", model: modelA }),
-      });
+      const [resA, resB] = await Promise.all([
+        fetch("/api/ollama", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": process.env.NEXT_PUBLIC_OLLAMA_API_KEY || "",
+          },
+          signal: pullController.signal,
+          body: JSON.stringify({ action: "start", model: modelA }),
+        }),
+        fetch("/api/ollama", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": process.env.NEXT_PUBLIC_OLLAMA_API_KEY || "",
+          },
+          signal: pullController.signal,
+          body: JSON.stringify({ action: "start", model: modelB }),
+        }),
+      ]);
+
+      if (pullController.signal.aborted) {
+        setIsLoading(false);
+        pullControllerRef.current = null;
+        return;
+      }
 
       if (!resA.ok) {
         const dataA = await resA.json();
         throw new Error(`Model A (${modelA}): ${dataA?.error ?? "Failed to start"}`);
       }
 
-      // Check and pull Model B if needed
-      const resB = await fetch("/api/ollama", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": process.env.NEXT_PUBLIC_OLLAMA_API_KEY || "",
-        },
-        body: JSON.stringify({ action: "start", model: modelB }),
-      });
-
       if (!resB.ok) {
         const dataB = await resB.json();
         throw new Error(`Model B (${modelB}): ${dataB?.error ?? "Failed to start"}`);
       }
     } catch (err) {
-      setError(getMessage(err));
-      setIsThinking(false);
+      const isAbort =
+        (err instanceof DOMException && err.name === "AbortError") ||
+        (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError") ||
+        pullController.signal.aborted;
+
+      if (!isAbort) {
+        setError(getMessage(err));
+      }
       setIsLoading(false);
+      pullControllerRef.current = null;
       return;
     }
 
     setIsLoading(false);
+    pullControllerRef.current = null;
 
-    // Add initial user message
     const userMessage: Message = {
       id: nextId("user"),
       role: "user",
@@ -100,102 +131,179 @@ export function DialogueUncontrolled({
     };
 
     setConversation([userMessage]);
-
-    // Model A responds first
-    await getModelResponse(modelA, "A", [userMessage]);
+    await runClashDialogue(maxRounds, 1);
   };
 
-  const getModelResponse = async (model: string, speaker: "A" | "B", conversationHistory: Message[]) => {
-    if (turnCountRef.current >= maxTurns) {
-      setIsThinking(false);
-      setCurrentSpeaker(null);
-      return;
-    }
-
-    turnCountRef.current++;
-    setCurrentSpeaker(speaker);
-    setIsThinking(true);
-    setError(null);
-
+  const runClashDialogue = async (rounds: number, startTurn: number) => {
     const controller = new AbortController();
     controllerRef.current = controller;
 
-    const payloadMessages = [{ role: "system", content: systemPrompt }, ...conversationHistory];
+    setIsStreaming(true);
+    setError(null);
 
     try {
-      const res = await fetch("/api/compare", {
+      const response = await fetch("/api/clash", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          model,
-          messages: payloadMessages,
+          modelA,
+          modelB,
+          systemPrompt,
+          userPrompt,
+          maxRounds: rounds,
+          startFromTurn: startTurn,
         }),
       });
 
-      if (controller.signal.aborted) {
-        return;
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data?.error ?? "Failed to start dialogue");
       }
 
-      const contentType = res.headers.get("Content-Type") || "";
-      if (res.ok && contentType.includes("text/plain")) {
-        const assistantMessage: Message = {
-          id: nextId("assistant"),
-          role: "assistant",
-          content: "",
-        };
+      if (!response.body) {
+        throw new Error("No response stream");
+      }
 
-        setConversation((prev) => [...prev, assistantMessage]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-        let acc = "";
+      while (true) {
+        const { done, value } = await reader.read();
 
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (controller.signal.aborted) {
-              try {
-                await reader.cancel();
-              } catch {}
-              break;
-            }
-            acc += decoder.decode(value, { stream: true });
-            const latest = acc;
-            setConversation((prev) => prev.map((m) => (m.id === assistantMessage.id ? { ...m, content: latest } : m)));
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          try {
+            const event: StreamEvent = JSON.parse(trimmed);
+            handleStreamEvent(event);
+          } catch (parseErr) {
+            console.warn("Failed to parse event:", trimmed);
           }
         }
-
-        // After Model A responds, Model B should respond (using Model A's response as input)
-        const nextSpeaker = speaker === "A" ? "B" : "A";
-        const nextModel = speaker === "A" ? modelB : modelA;
-        const updatedHistory = [...conversationHistory, { ...assistantMessage, content: acc }];
-
-        setIsThinking(false);
-        setCurrentSpeaker(null);
-
-        // Continue the dialogue with the other model
-        setTimeout(() => {
-          getModelResponse(nextModel, nextSpeaker, updatedHistory);
-        }, 500);
-      } else {
-        const data = await res.json();
-        throw new Error(data?.error ?? "Failed to fetch model response.");
       }
     } catch (err) {
       const isAbort =
         (err instanceof DOMException && err.name === "AbortError") ||
         (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError") ||
         controller.signal.aborted;
-      if (isAbort) {
-        return;
+
+      if (!isAbort) {
+        setError(getMessage(err));
       }
-      setError(getMessage(err));
-      setIsThinking(false);
+    } finally {
+      setIsStreaming(false);
       setCurrentSpeaker(null);
+      controllerRef.current = null;
     }
   };
+
+  const handleStreamEvent = (event: StreamEvent) => {
+    switch (event.type) {
+      case "turn-start":
+        if (event.speaker && event.turn) {
+          setCurrentSpeaker(event.speaker);
+          setCurrentTurn(event.turn);
+
+          if (!currentMessageIdRef.current) {
+            const msgId = nextId("assistant");
+            currentMessageIdRef.current = msgId;
+
+            const newMessage: Message = {
+              id: msgId,
+              role: "assistant",
+              content: "",
+            };
+
+            setConversation((prev) => [...prev, newMessage]);
+          }
+        }
+        break;
+
+      case "delta":
+        if (event.content && currentMessageIdRef.current) {
+          const msgId = currentMessageIdRef.current;
+          setConversation((prev) =>
+            prev.map((msg) => (msg.id === msgId ? { ...msg, content: msg.content + event.content } : msg))
+          );
+        }
+        break;
+
+      case "turn-end":
+        if (event.turn) {
+          setCompletedTurns(event.turn);
+          setCompletedRounds(Math.ceil(event.turn / 2));
+        }
+        currentMessageIdRef.current = null;
+        setCurrentSpeaker(null);
+        break;
+
+      case "complete":
+        setIsComplete(true);
+        setIsStreaming(false);
+        setCurrentSpeaker(null);
+        break;
+
+      case "error":
+        if (event.error) {
+          setError(event.error);
+        }
+        setIsStreaming(false);
+        setCurrentSpeaker(null);
+        break;
+    }
+  };
+
+  const handleStop = () => {
+    if (pullControllerRef.current) pullControllerRef.current.abort();
+    if (controllerRef.current) controllerRef.current.abort();
+    setIsStreaming(false);
+    setIsLoading(false);
+    setCurrentSpeaker(null);
+  };
+
+  const handleContinue = () => {
+    const newAllowedRounds = allowedRounds + maxRounds;
+    setAllowedRounds(newAllowedRounds);
+    setIsComplete(false);
+    runClashDialogue(newAllowedRounds, completedTurns + 1);
+  };
+
+  const handleRestart = () => {
+    if (pullControllerRef.current) pullControllerRef.current.abort();
+    if (controllerRef.current) controllerRef.current.abort();
+
+    setConversation([]);
+    setError(null);
+    setCurrentTurn(0);
+    setCompletedTurns(0);
+    setCompletedRounds(0);
+    setIsComplete(false);
+    setAllowedRounds(maxRounds);
+    currentMessageIdRef.current = null;
+
+    startDialogue();
+  };
+
+  const handleReset = () => {
+    if (pullControllerRef.current) pullControllerRef.current.abort();
+    if (controllerRef.current) controllerRef.current.abort();
+
+    onClose?.();
+  };
+
+  const canContinue = isComplete && !isStreaming && !isLoading && conversation.length;
+  const canRestart = isComplete && !isStreaming && !isLoading && conversation.length;
+  const canStop = isStreaming || isLoading;
+  const canReset = !isStreaming && !isLoading && conversation.length;
 
   return (
     <section className="flex h-[500px] w-full flex-col gap-3 rounded-md border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-[#0b0b0b]">
@@ -204,23 +312,49 @@ export function DialogueUncontrolled({
           <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
             AI-to-AI Dialogue
           </h3>
-          <button
-            onClick={() => {
-              hasStartedRef.current = false;
-            }}
-            className="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isThinking || isLoading}
-          >
-            Stop
-          </button>
+          <div className="flex gap-2">
+            {canContinue && (
+              <button
+                onClick={handleContinue}
+                className="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              >
+                Continue... (+{maxRounds} rounds)
+              </button>
+            )}
+            {canRestart && (
+              <button
+                onClick={handleRestart}
+                className="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              >
+                Restart
+              </button>
+            )}
+            <button
+              onClick={canStop ? handleStop : handleReset}
+              className="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-zinc-700 dark:hover:bg-zinc-900"
+              disabled={!canStop && !canReset}
+            >
+              {canStop ? "Stop" : "Reset"}
+            </button>
+          </div>
         </div>
         <span className="text-sm text-sky-700 dark:text-sky-400">
-          {isLoading ? "Loading…" : isThinking && currentSpeaker ? `Responding…` : null}
+          {isLoading
+            ? "Pulling models..."
+            : isStreaming && currentSpeaker
+            ? `Model ${currentSpeaker} responding... (round ${Math.round(currentTurn / 2)}/${allowedRounds})`
+            : isComplete
+            ? `Complete (${completedRounds} rounds)`
+            : null}
         </span>
-        {error && <div className="rounded-md bg-red-100 px-3 py-2 text-xs text-red-800">{error}</div>}
+        {error && (
+          <div className="rounded-md bg-red-100 px-3 py-2 text-xs text-red-800 dark:bg-red-900/20 dark:text-red-400">
+            {error}
+          </div>
+        )}
       </header>
 
-      <ConversationLayout conversation={conversation} useModelLabels={true} labelA={`Model A`} labelB={`Model B`} />
+      <ConversationLayout conversation={conversation} useModelLabels={true} labelA="Model A" labelB="Model B" />
     </section>
   );
 }
