@@ -32,6 +32,7 @@ export function PromptTextarea({
 
   const handleBeforeChange = () => {
     if (confirmOnBlur === false) return true;
+    if (!restartChats) return true;
     return confirmBeforeChange(restartChats);
   };
 

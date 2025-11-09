@@ -25,13 +25,9 @@ function TwoChatsLayoutContent() {
   const chatB = useRef<ChatPanelHandle | null>(null);
   const [isRestarting, setIsRestarting] = useState(false);
   const { chatStatus } = useModelSelection();
-  const disableMultipleSending =
-    isRestarting ||
-    chatStatus.A.isLoading ||
-    chatStatus.A.isThinking ||
-    chatStatus.B.isLoading ||
-    chatStatus.B.isThinking;
-
+  const isBusy = chatStatus.A.isLoading || chatStatus.A.isThinking || chatStatus.B.isLoading || chatStatus.B.isThinking;
+  const disableMultipleSending = isRestarting || isBusy;
+  const shouldConfirmPrompts = chatStatus.A.hasHistory || chatStatus.B.hasHistory || isBusy;
   async function restartChats() {
     if (isRestarting) return;
     setIsRestarting(true);
@@ -54,9 +50,14 @@ function TwoChatsLayoutContent() {
           label="System prompt"
           value={systemPrompt}
           onChange={setSystemPrompt}
-          restartChats={restartChats}
+          restartChats={shouldConfirmPrompts ? restartChats : undefined}
         />
-        <PromptTextarea label="User prompt" value={userPrompt} onChange={setUserPrompt} restartChats={restartChats} />
+        <PromptTextarea
+          label="User prompt"
+          value={userPrompt}
+          onChange={setUserPrompt}
+          restartChats={shouldConfirmPrompts ? restartChats : undefined}
+        />
       </div>
       <div className="mb-4 flex items-center justify-end">
         <SendButton
