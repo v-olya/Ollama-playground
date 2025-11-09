@@ -8,7 +8,7 @@ import { PromptTextarea, confirmBeforeChange } from "../components/PromptTextare
 import Tooltip from "../components/Tooltip";
 import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
 
-export const maxTurns = 5; // Limit the conversation length
+export const maxRounds = 3; // Each round = both models respond (A then B)
 
 export default function Page() {
   const placeholderText = "Choose one of two default system prompts (modes), or craft your own";
@@ -33,7 +33,7 @@ export default function Page() {
     },
     {
       label: "Techno-Utopian vs Dystopian Future",
-      prompt: "Which is more likely: a future where AI liberates humanity, or one where it subtly enslaves us?",
+      prompt: "Which is more likely: a future where AI liberates humanity, or one where it subtly enslaves the people?",
     },
     {
       label: "The Ethics of Autonomous AI Agents",
@@ -86,11 +86,9 @@ export default function Page() {
     },
   ];
 
-  const collaborativePrompt =
-    "You are an AI language model engaged in a collaborative dialogue with another AI, not a human. Your goal is to explore ideas and share insights. Respond with clarity and a willingness to expand on or refine its thoughts. Avoid repetition, aim to complement the conversation. IMPORTANT: your answer shold be 1-3 sentences long; the conversation should be limited to 5 turns.";
+  const collaborativePrompt = `You are an AI language model engaged in a collaborative dialogue with another AI, not a human. Your goal is to explore ideas and share insights. Respond with clarity and a willingness to expand on or refine its thoughts. Avoid repetition, aim to complement the conversation. IMPORTANT: your answer shold be 1-2 sentences long; the conversation would be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
 
-  const competitivePrompt =
-    "You are an AI language model engaged in a formal debate with another AI, not a human. Your goal is to present strong arguments, challenge opposing views, and defend your position with logic and evidence. Be assertive and intellectually rigorous. IMPORTANT: your answer shold be 1-3 sentences long; the conversation should be limited to 5 turns.";
+  const competitivePrompt = `You are an AI language model engaged in a formal debate with another AI, not a human. Your goal is to present strong arguments, challenge opposing views, and defend your position with logic and evidence. Be assertive and intellectually rigorous. IMPORTANT: your answer shold be 1-2 sentences long; the conversation would be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
 
   const restartChats = () => {};
 
@@ -196,9 +194,8 @@ export default function Page() {
           </div>
           <div className="w-full mt-4 text-center">
             <SendButton
-              disabled={systemPrompt.trim().length === 0}
+              disabled={!systemPrompt.trim().length || !userPrompt.trim().length}
               onClick={() => {
-                // commit the system prompt and act as "Start chat" for this page
                 setIsSystemCommitted(true);
               }}
               onKeyDown={(e) => {
@@ -218,7 +215,8 @@ export default function Page() {
                 userPrompt={userPrompt}
                 modelA={selectedModelA}
                 modelB={selectedModelB}
-                isActive={isSystemCommitted}
+                maxRounds={maxRounds}
+                onClose={() => setIsSystemCommitted(false)}
               />
             </div>
           )}
