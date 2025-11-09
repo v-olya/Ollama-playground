@@ -6,7 +6,7 @@ export function nextId(prefix: string) {
 
 export function confirmBeforeChange(restartChats?: () => void) {
   const confirmed = window.confirm(
-    "Attention: this change will clear the current chat.\n Are you sure you want to restart?"
+    "Attention: this change will clear the current chat.\nAre you sure you want to restart?"
   );
   if (!confirmed) return false;
   if (restartChats) restartChats();
