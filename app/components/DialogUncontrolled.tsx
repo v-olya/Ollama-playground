@@ -16,6 +16,7 @@ interface DialogueUncontrolledProps {
   maxRounds: number;
   onClose?: () => void;
   onCompleteChange?: (isComplete: boolean) => void;
+  onActiveChange?: (isActive: boolean) => void;
 }
 
 type StreamEvent = {
@@ -34,6 +35,7 @@ export function DialogueUncontrolled({
   maxRounds,
   onClose,
   onCompleteChange,
+  onActiveChange,
 }: DialogueUncontrolledProps) {
   const [conversation, setConversation] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,6 +51,7 @@ export function DialogueUncontrolled({
   const controllerRef = useRef<AbortController | null>(null);
   const pullControllerRef = useRef<AbortController | null>(null);
   const currentMessageIdRef = useRef<string | null>(null);
+  const isActiveRef = useRef(false);
 
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
@@ -273,8 +276,18 @@ export function DialogueUncontrolled({
     return () => {
       if (controllerRef.current) controllerRef.current.abort();
       if (pullControllerRef.current) pullControllerRef.current.abort();
+      isActiveRef.current = false;
+      onActiveChange?.(false);
     };
-  }, [startDialogue]);
+  }, [onActiveChange, startDialogue]);
+
+  useEffect(() => {
+    const isActive = isLoading || isStreaming;
+    if (isActiveRef.current !== isActive) {
+      isActiveRef.current = isActive;
+      onActiveChange?.(isActive);
+    }
+  }, [isLoading, isStreaming, onActiveChange]);
 
   const handleStop = () => {
     if (pullControllerRef.current) pullControllerRef.current.abort();
@@ -341,7 +354,7 @@ export function DialogueUncontrolled({
           <div className="flex gap-2">
             {canContinue && (
               <button onClick={handleContinue} className={secondaryButtonClass}>
-                Continue... (+{maxRounds} rounds)
+                Continue (+{maxRounds} rounds)
               </button>
             )}
             {canRestart && (

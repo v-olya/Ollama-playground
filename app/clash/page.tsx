@@ -24,12 +24,37 @@ export default function Page() {
   const [selectedModelB, setSelectedModelB] = useState(MODEL_OPTIONS[1].value);
   const [chatSession, setChatSession] = useState(0); // to remount DialogueUncontrolled
   const [isChatComplete, setIsChatComplete] = useState(false);
+  const [isChatActive, setIsChatActive] = useState(false);
 
-  const handleSystemPromptChange = (newPrompt: string) => {
-    setSystemPrompt(newPrompt);
+  const resetCommittedState = () => {
     setIsSystemCommitted(false);
+    setIsChatComplete(false);
+    setIsChatActive(false);
+  };
+
+  const applySystemPrompt = (prompt: string) => {
+    setSystemPrompt(prompt);
     setModeSelected(null);
     setIsChatComplete(false);
+  };
+
+  const applyUserPrompt = (prompt: string) => {
+    setUserPrompt(prompt);
+    setIsChatComplete(false);
+  };
+
+  const safeApplyPrompt = (kind: "system" | "user", next: string) => {
+    const current = kind === "system" ? systemPrompt : userPrompt;
+    const apply = kind === "system" ? applySystemPrompt : applyUserPrompt;
+    if (next === current) return true;
+    if (!isSystemCommitted) {
+      apply(next);
+      return true;
+    }
+    const ok = confirmBeforeChange(resetCommittedState);
+    if (!ok) return false;
+    apply(next);
+    return true;
   };
 
   const left = [
@@ -96,26 +121,15 @@ export default function Page() {
 
   const competitivePrompt = `You are an AI language model engaged in a formal debate with another AI, not a human. Be assertive and intellectually rigorous. Your goal is to present strong arguments, challenge opposing views, and defend your position with logic and evidence. IMPORTANT: your answer shold be 1-2 sentences long; the conversation will be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
 
+  const startDisabled =
+    !systemPrompt.trim().length || !userPrompt.trim().length || (isSystemCommitted && !isChatComplete);
+
   const startChat = () => {
-    if (!systemPrompt.trim().length || !userPrompt.trim().length) return;
-    if (isSystemCommitted && !isChatComplete) return;
+    if (startDisabled) return;
     setIsChatComplete(false);
     setIsSystemCommitted(true);
+    setIsChatActive(true);
     setChatSession((prev) => prev + 1);
-  };
-
-  const confirmAndApply = (newPrompt: string): boolean => {
-    if (!isSystemCommitted) {
-      handleSystemPromptChange(newPrompt);
-      return true;
-    }
-    const ok = confirmBeforeChange(() => {
-      setIsSystemCommitted(false);
-      setIsChatComplete(false);
-    });
-    if (!ok) return false;
-    handleSystemPromptChange(newPrompt);
-    return true;
   };
 
   const makeModelChangeHandler = (setter: (value: string) => void) => (value: string) => {
@@ -123,17 +137,13 @@ export default function Page() {
       setter(value);
       return;
     }
-    const ok = confirmBeforeChange(() => {
-      setIsSystemCommitted(false);
-      setIsChatComplete(false);
-    });
+    const ok = confirmBeforeChange(resetCommittedState);
     if (!ok) return;
     setter(value);
   };
 
   const handleModelAChange = makeModelChangeHandler(setSelectedModelA);
   const handleModelBChange = makeModelChangeHandler(setSelectedModelB);
-  const promptsLocked = isSystemCommitted && !isChatComplete;
 
   return (
     <>
@@ -159,10 +169,7 @@ export default function Page() {
                 setSelectedModelB(a);
                 return;
               }
-              const ok = confirmBeforeChange(() => {
-                setIsSystemCommitted(false);
-                setIsChatComplete(false);
-              });
+              const ok = confirmBeforeChange(resetCommittedState);
               if (!ok) return;
               const a = selectedModelA;
               const b = selectedModelB;
@@ -190,12 +197,12 @@ export default function Page() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (promptsLocked) return;
-                    setUserPrompt(it.prompt);
+                    if (isChatActive) return;
+                    safeApplyPrompt("user", it.prompt);
                   }}
-                  aria-disabled={promptsLocked || undefined}
+                  aria-disabled={isChatActive || undefined}
                   className={`text-left bg-transparent border-0 p-0 text-black font-bold my-2 text-sm transition-opacity ${
-                    promptsLocked ? "opacity-60 pointer-events-none" : "cursor-pointer"
+                    isChatActive ? "opacity-60 pointer-events-none" : "cursor-pointer"
                   }`}
                 >
                   {it.label}
@@ -210,16 +217,17 @@ export default function Page() {
             <PromptTextarea
               label="System prompt"
               value={systemPrompt}
-              onChange={handleSystemPromptChange}
-              disabled={promptsLocked}
+              onChange={applySystemPrompt}
+              disabled={isChatActive}
               placeholder={placeholderText}
+              restartChats={resetCommittedState}
               confirmOnBlur={isSystemCommitted}
             />
           </div>
           <div className="flex gap-3 mt-4 justify-center w-full">
             <button
               onClick={() => {
-                const applied = confirmAndApply(competitivePrompt);
+                const applied = safeApplyPrompt("system", competitivePrompt);
                 if (applied) setModeSelected("competitive");
               }}
               disabled={modeSelected === "competitive"}
@@ -232,7 +240,7 @@ export default function Page() {
             </button>
             <button
               onClick={() => {
-                const applied = confirmAndApply(collaborativePrompt);
+                const applied = safeApplyPrompt("system", collaborativePrompt);
                 if (applied) setModeSelected("collaborative");
               }}
               disabled={modeSelected === "collaborative"}
@@ -248,19 +256,20 @@ export default function Page() {
             <PromptTextarea
               label="User prompt"
               value={userPrompt}
-              onChange={setUserPrompt}
-              disabled={promptsLocked}
+              onChange={applyUserPrompt}
+              disabled={isChatActive}
               placeholder="Type or click a side prompt to populate this field"
-              confirmOnBlur={false}
+              restartChats={resetCommittedState}
+              confirmOnBlur={isSystemCommitted}
             />
           </div>
           <div className="w-full mt-4 text-center">
             <SendButton
-              disabled={!systemPrompt.trim().length || !userPrompt.trim().length || promptsLocked}
+              disabled={startDisabled}
               onClick={startChat}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
-                  if (promptsLocked) return;
+                  if (startDisabled) return;
                   e.preventDefault();
                   startChat();
                 }
@@ -279,11 +288,9 @@ export default function Page() {
                 modelA={selectedModelA}
                 modelB={selectedModelB}
                 maxRounds={maxRounds}
-                onClose={() => {
-                  setIsSystemCommitted(false);
-                  setIsChatComplete(false);
-                }}
+                onClose={resetCommittedState}
                 onCompleteChange={setIsChatComplete}
+                onActiveChange={setIsChatActive}
               />
             </div>
           )}
@@ -297,12 +304,12 @@ export default function Page() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (promptsLocked) return;
-                    setUserPrompt(it.prompt);
+                    if (isChatActive) return;
+                    safeApplyPrompt("user", it.prompt);
                   }}
-                  aria-disabled={promptsLocked || undefined}
+                  aria-disabled={isChatActive || undefined}
                   className={`text-left bg-transparent border-0 p-0 text-black font-bold my-2 text-sm transition-opacity ${
-                    promptsLocked ? "cursor-not-allowed opacity-60 pointer-events-none" : "cursor-pointer"
+                    isChatActive ? "cursor-not-allowed opacity-60 pointer-events-none" : "cursor-pointer"
                   }`}
                 >
                   {it.label}
