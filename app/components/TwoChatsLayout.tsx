@@ -5,6 +5,8 @@ import { ChatPanel } from "./ChatPanel";
 import { SendButton } from "./SendButton";
 import { PromptTextarea } from "./PromptTextarea";
 import { ModelSelectionProvider, useModelSelection } from "../contexts/ModelSelectionContext";
+import { secondaryButtonClass } from "../helpers/buttonClasses";
+import { confirmBeforeChange } from "../helpers/functions";
 
 const DEFAULT_SYSTEM_PROMPT =
   "You are a helpful assistant. Provide a clear, concise, and well-formatted response. When appropriate, add examples, explanations, and code snippets. Prioritize correctness, readability, and relevance.";
@@ -28,6 +30,24 @@ function TwoChatsLayoutContent() {
   const isBusy = chatStatus.A.isLoading || chatStatus.A.isThinking || chatStatus.B.isLoading || chatStatus.B.isThinking;
   const disableMultipleSending = isRestarting || isBusy;
   const shouldConfirmPrompts = chatStatus.A.hasHistory || chatStatus.B.hasHistory || isBusy;
+
+  const handleResetPrompts = () => {
+    if (disableMultipleSending) return;
+    const applyDefaults = () => {
+      setSystemPrompt(DEFAULT_SYSTEM_PROMPT);
+      setUserPrompt(DEFAULT_USER_PROMPT);
+    };
+    if (!shouldConfirmPrompts) {
+      applyDefaults();
+      return;
+    }
+    const confirmed = confirmBeforeChange(() => {
+      void restartChats();
+    });
+    if (!confirmed) return;
+    applyDefaults();
+  };
+
   async function restartChats() {
     if (isRestarting) return;
     setIsRestarting(true);
@@ -59,7 +79,15 @@ function TwoChatsLayoutContent() {
           restartChats={shouldConfirmPrompts ? restartChats : undefined}
         />
       </div>
-      <div className="mb-4 flex items-center justify-end">
+      <div className="mb-4 flex items-center justify-end gap-3">
+        <button
+          type="button"
+          className={secondaryButtonClass}
+          onClick={handleResetPrompts}
+          disabled={disableMultipleSending}
+        >
+          Reset prompts
+        </button>
         <SendButton
           onClick={() => {
             chatA.current?.triggerSend();
