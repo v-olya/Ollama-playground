@@ -87,9 +87,9 @@ export default function Page() {
     },
   ];
 
-  const collaborativePrompt = `You are an AI language model engaged in a collaborative dialogue with another AI, not a human. Your goal is to explore ideas and share insights. Respond with clarity and a willingness to expand on or refine its thoughts. Avoid repetition, aim to complement the conversation. IMPORTANT: your answer shold be 1-2 sentences long; the conversation would be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
+  const collaborativePrompt = `You are an AI language model engaged in a collaborative dialogue with another AI, not a human. Your goal is to explore ideas and share insights. Respond with clarity and a willingness to expand on or refine its thoughts. Avoid repetition, aim to complement the conversation. IMPORTANT: your answer shold be 1-2 sentences long; the conversation will be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
 
-  const competitivePrompt = `You are an AI language model engaged in a formal debate with another AI, not a human. Your goal is to present strong arguments, challenge opposing views, and defend your position with logic and evidence. Be assertive and intellectually rigorous. IMPORTANT: your answer shold be 1-2 sentences long; the conversation would be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
+  const competitivePrompt = `You are an AI language model engaged in a formal debate with another AI, not a human. Be assertive and intellectually rigorous. Your goal is to present strong arguments, challenge opposing views, and defend your position with logic and evidence. IMPORTANT: your answer shold be 1-2 sentences long; the conversation will be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
 
   const restartChats = () => {};
 
@@ -126,7 +126,7 @@ export default function Page() {
         </div>
       </div>
       <div className="grid grid-cols-[1fr_2fr_1fr] gap-6 h-screen px-6 py-12 box-border">
-        <aside className="flex flex-col">
+        <aside className="flex flex-col text-center">
           <h2 className="text-xl font-extrabold mb-2">⚔️ Debate topics</h2>
           <nav className="flex flex-col">
             {left.map((it) => (
@@ -221,7 +221,7 @@ export default function Page() {
           )}
         </main>
 
-        <aside className="flex flex-col">
+        <aside className="flex flex-col text-center">
           <h2 className="text-xl font-extrabold mb-2">🤝 Storytelling</h2>
           <nav className="flex flex-col">
             {right.map((it) => (
