@@ -6,7 +6,7 @@ import { SelectWithDisabled } from "../components/SelectWithDisabled";
 import { DialogueUncontrolled } from "../components/DialogUncontrolled";
 import { PromptTextarea } from "../components/PromptTextarea";
 import Tooltip from "../components/Tooltip";
-import { secondaryButtonClass, selectedModeClass } from "../components/buttonClasses";
+import { secondaryButtonClass, selectedModeClass } from "../helpers/buttonClasses";
 import SwapButton from "../components/SwapButton";
 import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
 import { confirmBeforeChange } from "../helpers/functions";

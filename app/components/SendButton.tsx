@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { primaryButtonBase } from "./buttonClasses";
+import { primaryButtonBase } from "../helpers/buttonClasses";
 
 interface SendButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children?: React.ReactNode;

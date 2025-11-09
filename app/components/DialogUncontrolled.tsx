@@ -2,11 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ConversationLayout } from "./ConversationLayout";
-import { secondaryButtonClass } from "./buttonClasses";
+import { secondaryButtonClass } from "../helpers/buttonClasses";
 import { type Message } from "../helpers/types";
 import { getMessage, nextId } from "../helpers/functions";
 import Link from "next/link";
-import { primaryButtonBase } from "./buttonClasses";
+import { primaryButtonBase } from "../helpers/buttonClasses";
 
 interface DialogueUncontrolledProps {
   systemPrompt: string;
