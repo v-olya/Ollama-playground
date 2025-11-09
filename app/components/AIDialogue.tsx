@@ -219,8 +219,8 @@ export function AIDialogue({ systemPrompt, userPrompt, modelA, modelB, isActive 
         conversation={conversation}
         emptyMessage="Click 'Restart' to begin dialogue"
         useModelLabels={true}
-        labelA={`Model A (${modelA})`}
-        labelB={`Model B (${modelB})`}
+        labelA={`Model A`}
+        labelB={`Model B`}
       />
     </section>
   );

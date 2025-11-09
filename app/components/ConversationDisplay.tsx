@@ -20,7 +20,7 @@ export function ConversationDisplay({
 
   return (
     <div className="flex-1 space-y-2 overflow-auto rounded-md border border-zinc-100 p-3 dark:border-zinc-800">
-      {conversation.length === 0 && <div className="text-sm text-zinc-500">{emptyMessage}</div>}
+      {!conversation.length && <div className="text-sm text-zinc-500">{emptyMessage}</div>}
       {conversation.map((message) => {
         let label = "";
         if (useModelLabels && message.role === "assistant") {
