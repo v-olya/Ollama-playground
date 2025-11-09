@@ -1,6 +1,6 @@
 import { type Message } from "../helpers/types";
 
-interface ConversationDisplayProps {
+interface ConversationLayoutProps {
   conversation: Message[];
   emptyMessage?: string;
   useModelLabels?: boolean;
@@ -8,13 +8,13 @@ interface ConversationDisplayProps {
   labelB?: string;
 }
 
-export function ConversationDisplay({
+export function ConversationLayout({
   conversation,
   emptyMessage = "No messages yet",
   useModelLabels = false,
   labelA = "Model A",
   labelB = "Model B",
-}: ConversationDisplayProps) {
+}: ConversationLayoutProps) {
   // Count assistant messages to alternate labels
   let assistantCount = 0;
 

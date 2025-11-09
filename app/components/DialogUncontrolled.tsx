@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ConversationDisplay } from "./ConversationDisplay";
+import { ConversationLayout } from "./ConversationLayout";
 import { type Message } from "../helpers/types";
 import { getMessage, nextId } from "../helpers/functions";
 import { maxTurns } from "../clash/page";
 
-interface AIDialogueProps {
+interface DialogueUncontrolledProps {
   systemPrompt: string;
   userPrompt: string;
   modelA: string;
@@ -14,7 +14,13 @@ interface AIDialogueProps {
   isActive: boolean;
 }
 
-export function AIDialogue({ systemPrompt, userPrompt, modelA, modelB, isActive }: AIDialogueProps) {
+export function DialogueUncontrolled({
+  systemPrompt,
+  userPrompt,
+  modelA,
+  modelB,
+  isActive,
+}: DialogueUncontrolledProps) {
   const [conversation, setConversation] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
@@ -201,12 +207,11 @@ export function AIDialogue({ systemPrompt, userPrompt, modelA, modelB, isActive 
           <button
             onClick={() => {
               hasStartedRef.current = false;
-              startDialogue();
             }}
             className="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={isThinking || isLoading}
           >
-            Restart
+            Stop
           </button>
         </div>
         <span className="text-sm text-sky-700 dark:text-sky-400">
@@ -215,13 +220,7 @@ export function AIDialogue({ systemPrompt, userPrompt, modelA, modelB, isActive 
         {error && <div className="rounded-md bg-red-100 px-3 py-2 text-xs text-red-800">{error}</div>}
       </header>
 
-      <ConversationDisplay
-        conversation={conversation}
-        emptyMessage="Click 'Restart' to begin dialogue"
-        useModelLabels={true}
-        labelA={`Model A`}
-        labelB={`Model B`}
-      />
+      <ConversationLayout conversation={conversation} useModelLabels={true} labelA={`Model A`} labelB={`Model B`} />
     </section>
   );
 }

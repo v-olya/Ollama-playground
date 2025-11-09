@@ -3,7 +3,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { SendButton } from "./SendButton";
 import { SelectWithDisabled } from "./SelectWithDisabled";
-import { ConversationDisplay } from "./ConversationDisplay";
+import { ConversationLayout } from "./ConversationLayout";
 import { type ActionKey, type Message } from "../helpers/types";
 import { useModelSelection } from "../contexts/ModelSelectionContext";
 import { getMessage, nextId } from "../helpers/functions";
@@ -385,7 +385,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         {error && <div className="rounded-md bg-red-100 px-3 py-2 text-xs text-red-800">{error}</div>}
       </header>
 
-      <ConversationDisplay conversation={conversation} />
+      <ConversationLayout conversation={conversation} />
 
       <div className="mt-1 flex gap-3">
         <input

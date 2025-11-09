@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { SendButton } from "../components/SendButton";
 import { SelectWithDisabled } from "../components/SelectWithDisabled";
-import { AIDialogue } from "../components/AIDialogue";
+import { DialogueUncontrolled } from "../components/DialogUncontrolled";
 import { PromptTextarea, confirmBeforeChange } from "../components/PromptTextarea";
 import Tooltip from "../components/Tooltip";
 import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
@@ -213,7 +213,7 @@ export default function Page() {
 
           {isSystemCommitted && (
             <div className="w-full mt-6">
-              <AIDialogue
+              <DialogueUncontrolled
                 systemPrompt={systemPrompt}
                 userPrompt={userPrompt}
                 modelA={selectedModelA}
