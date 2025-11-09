@@ -138,9 +138,10 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   }, [sendAction]);
 
   const send = useCallback(async () => {
+    const runModel = selectedModel;
     // prefer typed input, fall back to the shared user prompt if empty
     const trimmed = input.trim() || userPrompt.trim();
-    if (!trimmed || !selectedModel) return;
+    if (!trimmed || !runModel) return;
 
     const userMessage: Message = {
       id: nextId("user"),
@@ -158,12 +159,12 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
     // Check and pull (if needed) before sending
     try {
       setIsLoading(true);
-      const result = await sendAction("start", selectedModel);
+      const result = await sendAction("start", runModel);
       if (result.aborted) {
         return;
       }
       // Model is now loaded and ready
-      runningModelRef.current = selectedModel;
+      runningModelRef.current = runModel;
     } catch (err) {
       setError(getMessage(err));
       return;
@@ -187,7 +188,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          model: selectedModel,
+          model: runModel,
           messages: payloadMessages,
         }),
       });
@@ -259,6 +260,10 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
       // Only clear thinking state if this is still the active controller
       if (generationControllerRef.current === controller) {
         setIsThinking(false);
+        generationControllerRef.current = null;
+        if (runningModelRef.current === runModel) {
+          runningModelRef.current = null;
+        }
       }
     }
   }, [conversation, input, selectedModel, systemPrompt, userPrompt, sendAction]);
