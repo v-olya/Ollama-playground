@@ -7,6 +7,7 @@ import { DialogueUncontrolled } from "../components/DialogUncontrolled";
 import { PromptTextarea, confirmBeforeChange } from "../components/PromptTextarea";
 import Tooltip from "../components/Tooltip";
 import { secondaryButtonClass, selectedModeClass } from "../components/buttonClasses";
+import SwapButton from "../components/SwapButton";
 import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
 
 export const maxRounds = 3; // Each round = both models respond (A then B)
@@ -116,6 +117,21 @@ export default function Page() {
             disabledOption={selectedModelB}
           />
         </div>
+
+        <div className="flex items-center">
+          <SwapButton
+            className="p-2"
+            onClick={() => {
+              const ok = confirmBeforeChange(restartChats);
+              if (!ok) return;
+              const a = selectedModelA;
+              const b = selectedModelB;
+              setSelectedModelA(b);
+              setSelectedModelB(a);
+            }}
+          />
+        </div>
+
         <div className="flex flex-col gap-1 text-right">
           <SelectWithDisabled
             id="modelB"
