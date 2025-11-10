@@ -178,7 +178,7 @@ export default function JudgePage() {
       <div className="flex items-center justify-center gap-4 mb-8">
         <Image src="/judge.svg" alt="Judge" width={64} height={64} />
         <div className="flex flex-col gap-2">
-          <label htmlFor="judge-model" className="text-sm font-medium text-zinc-700">
+          <label htmlFor="judge-model" className="mb-1 px-3 text-sm font-medium text-zinc-700">
             Select Judge Model
           </label>
           <SelectWithDisabled
