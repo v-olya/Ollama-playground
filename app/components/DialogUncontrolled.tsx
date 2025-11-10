@@ -381,7 +381,7 @@ export function DialogueUncontrolled({
         {CallJudge()}
         <span className="text-sm text-sky-700">
           {isLoading
-            ? "Pulling models..."
+            ? "Loading..."
             : isStreaming && currentSpeaker
             ? `Model ${currentSpeaker} responding... (round ${Math.round(currentTurn / 2)}/${allowedRounds})`
             : isComplete
