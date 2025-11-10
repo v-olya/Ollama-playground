@@ -66,9 +66,15 @@
 
 - **/compare** — An interactive page for side-by-side comparison of model outputs. It provides two chat panels so you can run the same prompt (or different prompts) against two model selections and compare results visually and functionally.
 
-  - How it works: the page uses the client UI components in `app/compare` (two-chat layout and chat panels) and calls the server API route at `/api/compare` to run and fetch model outputs.
+  - How it works: the UI component (`app/compare`) calls the server API route at `/api/compare` to run the models and stream the outputs.
 
-  - Quick use: open `http://localhost:3000/compare` while the dev server is running, enter a prompt or prompts, choose models, then run to see results side-by-side.
+- **/clash** — An interactive page to run two models against each other. It provides controls to pick Model A and Model B, choose or edit a system prompt (competitive or collaborative modes), and start (or stop) multi-round AI-to-AI conversation.
+
+  - How it works: the page (`app/clash`) composes a system prompt and a user prompt, then the server route at `app/api/clash/route.ts` streams alternating responses from the selected models. The route returns events as newline-delimited JSON so the UI can render streaming deltas.
+
+## Note
+
+It is not necessary to have the models loaded locally before starting. Every model will be pulled if necessary and then unloaded from memory during the cleanup process.
 
 ## License
 
