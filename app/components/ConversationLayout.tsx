@@ -41,7 +41,7 @@ export function ConversationLayout({
                 : "rounded-md bg-zinc-50 p-2 text-left text-zinc-900"
             }
           >
-            {label && <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">{label}</div>}
+            {label && <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-600">{label}</div>}
             <div className="whitespace-pre-wrap text-sm">{message.content}</div>
           </div>
         );
