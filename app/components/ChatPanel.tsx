@@ -30,6 +30,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   const pendingStartRef = useRef<{ model: string; controller: AbortController } | null>(null);
   // Track if the model is actually running (not just loading)
   const runningModelRef = useRef<string | null>(null);
+  const skipNextStartRef = useRef(false);
 
   const sendAction = useCallback(
     async (
@@ -160,9 +161,13 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
     // Check and pull (if needed) before sending
     try {
       setIsLoading(true);
-      const result = await sendAction("start", runModel);
-      if (result.aborted) {
-        return;
+      if (skipNextStartRef.current) {
+        skipNextStartRef.current = false;
+      } else {
+        const result = await sendAction("start", runModel);
+        if (result.aborted) {
+          return;
+        }
       }
       // Model is now loaded and ready
       runningModelRef.current = runModel;
@@ -288,7 +293,8 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
           setIsLoading(false);
         }
         if (!abortedStart) {
-          send();
+          skipNextStartRef.current = true;
+          await send();
         }
       },
       isLoading: isLoading,
@@ -403,12 +409,17 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               if (!isLoading && !isThinking) {
-                send();
+                void send();
               }
             }
           }}
         />
-        <SendButton onClick={send} disabled={isLoading || isThinking || !selectedModel}>
+        <SendButton
+          onClick={() => {
+            void send();
+          }}
+          disabled={isLoading || isThinking || !selectedModel}
+        >
           {isThinking ? "Generating…" : "Send"}
         </SendButton>
       </div>
