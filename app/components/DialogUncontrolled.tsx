@@ -346,11 +346,7 @@ export function DialogueUncontrolled({
 
     return isComplete && conversation.length ? (
       <div className="w-full mt-3 mb-2 text-center">
-        <Link 
-          href="/judge"
-          onClick={handleJudgeClick}
-          className={`${primaryButtonBase} bg-red-800`}
-        >
+        <Link href="/judge" onClick={handleJudgeClick} className={`${primaryButtonBase} bg-red-800`}>
           Call the judge
         </Link>
       </div>
@@ -358,10 +354,10 @@ export function DialogueUncontrolled({
   };
 
   return (
-    <section className="flex w-full flex-col gap-3 rounded-md border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-[#0b0b0b]">
+    <section className="flex w-full flex-col gap-3 rounded-md border border-zinc-200 bg-white p-4 shadow-sm">
       <header className="flex flex-col gap-2 text-center">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold tracking-wide text-zinc-700 dark:text-zinc-300">AI-to-AI Dialogue</h3>
+          <h3 className="text-sm font-semibold tracking-wide text-zinc-700">AI-to-AI Dialogue</h3>
           <div className="flex gap-2">
             {canContinue && (
               <button onClick={handleContinue} className={secondaryButtonClass}>
@@ -383,7 +379,7 @@ export function DialogueUncontrolled({
           </div>
         </div>
         {CallJudge()}
-        <span className="text-sm text-sky-700 dark:text-sky-400">
+        <span className="text-sm text-sky-700">
           {isLoading
             ? "Pulling models..."
             : isStreaming && currentSpeaker
@@ -392,11 +388,7 @@ export function DialogueUncontrolled({
             ? `Complete (${completedRounds} rounds)`
             : null}
         </span>
-        {error && (
-          <div className="rounded-md bg-red-100 px-3 py-2 text-xs text-red-800 dark:bg-red-900/20 dark:text-red-400">
-            {error}
-          </div>
-        )}
+        {error && <div className="rounded-md bg-red-100 px-3 py-2 text-xs text-red-800">{error}</div>}
       </header>
 
       <ConversationLayout conversation={conversation} useModelLabels={true} labelA="Model A" labelB="Model B" />

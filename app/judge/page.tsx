@@ -21,9 +21,9 @@ The criteria are:
 
 Response with JSON: {relevance: number(%), clarity: number(%), depth: number(%), engagement: number(%), creativity: number(%), text_feedback: string}. For the text part of response, choose playful commentary tone.`;
 
-const sectionHeadingClass = "text-lg font-semibold mb-3 text-zinc-800 dark:text-zinc-200";
-const cardClass = "rounded-md border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-[#0b0b0b]";
-const errorClass = "mb-6 rounded-md bg-red-100 px-4 py-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-400";
+const sectionHeadingClass = "text-lg font-semibold mb-3 text-zinc-800";
+const cardClass = "rounded-md border border-zinc-200 bg-white p-4 shadow-sm";
+const errorClass = "mb-6 rounded-md bg-red-100 px-4 py-3 text-sm text-red-800";
 
 type StreamEvent = {
   type: "start" | "delta" | "complete" | "error";
@@ -178,7 +178,7 @@ export default function JudgePage() {
       <div className="flex items-center justify-center gap-4 mb-8">
         <Image src="/judge.svg" alt="Judge" width={64} height={64} />
         <div className="flex flex-col gap-2">
-          <label htmlFor="judge-model" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label htmlFor="judge-model" className="text-sm font-medium text-zinc-700">
             Select Judge Model
           </label>
           <SelectWithDisabled
@@ -197,7 +197,7 @@ export default function JudgePage() {
             {conversation.length ? (
               <ConversationLayout conversation={conversation} useModelLabels={true} labelA="Model A" labelB="Model B" />
             ) : (
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              <p className="text-sm text-zinc-500">
                 No conversation history available. Please start a debate from the{" "}
                 <a href="/clash" className="text-blue-600">
                   /clash page

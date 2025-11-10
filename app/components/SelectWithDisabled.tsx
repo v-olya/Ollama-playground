@@ -14,7 +14,7 @@ export function SelectWithDisabled({ id, value, onChange, disabled = false, disa
   return (
     <select
       id={id}
-      className="rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-300 dark:border-zinc-700 dark:bg-transparent"
+      className="rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-300"
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}

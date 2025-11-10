@@ -324,13 +324,10 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   );
 
   return (
-    <section className="flex h-full w-full flex-col gap-3 rounded-md border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-[#0b0b0b]">
+    <section className="flex h-full w-full flex-col gap-3 rounded-md border border-zinc-200 bg-white p-4 shadow-sm">
       <header className="flex flex-col gap-2 text-center">
         <div className="flex flex-col gap-1 text-right">
-          <label
-            htmlFor={`model${mode}`}
-            className="py-1 tracking-wide text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400"
-          >
+          <label htmlFor={`model${mode}`} className="py-1 tracking-wide text-xs font-semibold uppercase text-zinc-500">
             Model {mode}
           </label>
           <div className="flex items-center gap-3">
@@ -390,9 +387,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
             </div>
           </div>
         </div>
-        <span className="text-sm text-sky-700 dark:text-sky-400">
-          {isLoading ? "Loading…" : isThinking ? "Responding…" : null}
-        </span>
+        <span className="text-sm text-sky-700">{isLoading ? "Loading…" : isThinking ? "Responding…" : null}</span>
         {error && <div className="rounded-md bg-red-100 px-3 py-2 text-xs text-red-800">{error}</div>}
       </header>
 
@@ -400,7 +395,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
 
       <div className="mt-1 flex gap-3">
         <input
-          className="flex-1 rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-300 dark:border-zinc-800 dark:bg-transparent"
+          className="flex-1 rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-300"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Your query"

@@ -27,7 +27,7 @@ export function PromptTextarea({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const dirtyCalledRef = useRef(false);
   const baseTextareaClass =
-    "min-h-10 w-full rounded-md border border-zinc-200 p-2 text-sm outline-none focus:ring-2 focus:ring-sky-300 dark:border-zinc-800 dark:bg-transparent";
+    "min-h-10 w-full rounded-md border border-zinc-200 p-2 text-sm outline-none focus:ring-2 focus:ring-sky-300";
   const textareaClass = disabled ? `${baseTextareaClass} cursor-not-allowed opacity-70` : baseTextareaClass;
 
   const handleBeforeChange = () => {
@@ -77,7 +77,7 @@ export function PromptTextarea({
 
   return (
     <label className="flex w-full flex-col gap-2">
-      <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300 text-right">{label}</div>
+      <div className="text-sm font-medium text-zinc-700 text-right">{label}</div>
       <div
         className={`
         grid

@@ -30,7 +30,7 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <div className="min-h-screen">
-          <nav className="mx-auto max-w-6xl flex items-center justify-start space-x-4 border-b border-zinc-200 bg-white/60 backdrop-blur-sm px-4 py-3 dark:border-zinc-800 dark:bg-black/60">
+          <nav className="mx-auto max-w-6xl flex items-center justify-start space-x-4 border-b border-zinc-200 bg-white/60 backdrop-blur-sm px-4 py-3">
             <a href="https://github.com/v-olya/olla" target="_blank" rel="noopener noreferrer" className="nav-link">
               GitHub Repo
             </a>
