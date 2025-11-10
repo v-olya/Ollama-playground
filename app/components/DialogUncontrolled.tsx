@@ -271,9 +271,12 @@ export function DialogueUncontrolled({
   }, [maxRounds, modelA, modelB, onCompleteChange, runClashDialogue, userPrompt]);
 
   useEffect(() => {
-    startDialogue();
+    const timeoutId = setTimeout(() => {
+      void startDialogue();
+    }, 0);
 
     return () => {
+      clearTimeout(timeoutId);
       if (controllerRef.current) controllerRef.current.abort();
       if (pullControllerRef.current) pullControllerRef.current.abort();
       isActiveRef.current = false;
