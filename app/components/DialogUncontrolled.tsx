@@ -340,9 +340,17 @@ export function DialogueUncontrolled({
   const canReset = !isStreaming && !isLoading && conversation.length;
 
   const CallJudge = () => {
+    const handleJudgeClick = () => {
+      sessionStorage.setItem("judgeConversation", JSON.stringify(conversation));
+    };
+
     return isComplete && conversation.length ? (
       <div className="w-full mt-3 mb-2 text-center">
-        <Link href="/judge" className={`${primaryButtonBase} bg-red-800`}>
+        <Link 
+          href="/judge"
+          onClick={handleJudgeClick}
+          className={`${primaryButtonBase} bg-red-800`}
+        >
           Call the judge
         </Link>
       </div>
