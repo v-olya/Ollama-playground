@@ -253,7 +253,7 @@ You MUST respond with a valid JSON object matching this EXACT structure:
   "thinking_steps": ["<optional step 1>", "<optional step 2>"]
 }
 
-CRITICAL: Use these EXACT key names: "modelA", "modelB" (camelCase), do NOT any other variation. Return JSON object, NO markdown, NO code fences, NO extra text.`,
+CRITICAL: Use these EXACT key names: "modelA", "modelB" (camelCase), do NOT any other variation. Return JSON object, NO markdown, NO extra text.`,
       },
       { role: "user" as const, content: userPrompt },
     ];
