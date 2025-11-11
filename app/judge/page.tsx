@@ -1,47 +1,84 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { SelectWithDisabled } from "../components/SelectWithDisabled";
 import { PromptTextarea } from "../components/PromptTextarea";
 import { ConversationLayout } from "../components/ConversationLayout";
 import { SendButton } from "../components/SendButton";
-import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
+import { THINKING_MODELS } from "../contexts/ModelSelectionContext";
 import { type Message } from "../helpers/types";
-import { nextId } from "../helpers/functions";
+import {
+  sectionHeading,
+  card,
+  errorAlert,
+  pageContainer,
+  headerRow,
+  colStack,
+  gridTwoCol,
+  mutedSm,
+  mutedXs,
+  tableCell,
+  tableHeader,
+} from "../helpers/twClasses";
 
-const defaultSystem = `You are an impartial AI judge tasked with evaluating a dialogue between two AI models. Your role is to assess the quality, coherence, originality, and relevance of each model's responses. You must remain neutral and analytical. Provide constructive feedback, highlight strengths and weaknesses, and declare a winner based on clear criteria.
+const defaultSystem = `You are an impartial AI judge tasked with evaluating a dialogue between two AI models. You must remain neutral and analytical. Score each model on the following criteria (1-10 scale):
 
-The criteria are:
 • Relevance – Does it stay on topic and respond meaningfully to the other model?
 • Clarity – Is the response easy to understand and well-structured?
 • Depth – Does it show nuanced reasoning or explore implications?
 • Engagement – Does it invite further dialogue or challenge ideas constructively?
 • Creativity – Does it offer original ideas, metaphors, or surprising insights?
 
-Response with JSON: {relevance: number(%), clarity: number(%), depth: number(%), engagement: number(%), creativity: number(%), text_feedback: string}. For the text part of response, choose playful commentary tone.`;
+Determine the winner based on total scores. If scores differ by less than 5%, it's a tie. Provide constructive feedback on strengths and weaknesses. Respond with JSON in the provided structure. Choose a slightly playful tone for your text_feedback. Include your thoughts as s thinking_steps field.`;
 
-const sectionHeadingClass = "text-lg font-semibold mb-3 text-zinc-800";
-const cardClass = "rounded-md border border-zinc-200 bg-white p-4 shadow-sm";
-const errorClass = "mb-6 rounded-md bg-red-100 px-4 py-3 text-sm text-red-800";
+type ScoreKey = "relevance" | "clarity" | "depth" | "engagement" | "creativity";
 
-type StreamEvent = {
-  type: "start" | "delta" | "complete" | "error";
-  content?: string;
-  error?: string;
+type ScoreBreakdown = Record<ScoreKey, number>;
+
+type WinnerLabel = "Model A" | "Model B" | "Tie";
+
+type JudgeResult = {
+  modelA: ScoreBreakdown;
+  modelB: ScoreBreakdown;
+  winner: WinnerLabel;
+  text_feedback: string;
+  thinking_steps?: string | string[];
 };
 
+const scoreFieldMeta: Array<{ key: ScoreKey; label: string }> = [
+  { key: "relevance", label: "Relevance" },
+  { key: "clarity", label: "Clarity" },
+  { key: "depth", label: "Depth" },
+  { key: "engagement", label: "Engagement" },
+  { key: "creativity", label: "Creativity" },
+];
+
+class JudgeRequestError extends Error {
+  details?: string;
+
+  constructor(message: string, details?: string) {
+    super(message);
+    this.name = "JudgeRequestError";
+    this.details = details;
+  }
+}
+
+type UnknownRecord = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is UnknownRecord => typeof value === "object" && value !== null;
+
 export default function JudgePage() {
-  const [selectedJudgeModel, setSelectedJudgeModel] = useState(MODEL_OPTIONS[0].value);
+  const isDev = process.env.NODE_ENV === "development";
+  const defaultJudgeModel = THINKING_MODELS[0].value;
+  const [selectedJudgeModel, setSelectedJudgeModel] = useState(defaultJudgeModel);
   const [systemPrompt, setSystemPrompt] = useState(defaultSystem);
   const [conversation, setConversation] = useState<Message[]>([]);
-  const [judgeOutput, setJudgeOutput] = useState<Message[]>([]);
+  const [judgeResult, setJudgeResult] = useState<JudgeResult | null>(null);
   const [isScoring, setIsScoring] = useState(false);
-  const [isPulling, setIsPulling] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const controllerRef = useRef<AbortController | null>(null);
-  const currentMessageIdRef = useRef<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   // Generate user prompt from conversation history
   const generateUserPrompt = (conv: Message[]): string => {
@@ -63,12 +100,11 @@ export default function JudgePage() {
   const userPrompt = generateUserPrompt(conversation);
 
   useEffect(() => {
-    const storedConversation = sessionStorage.getItem("judgeConversation");
+    const storedConversation = sessionStorage.getItem("lastConversation");
     if (!storedConversation) return;
     try {
       const parsed = JSON.parse(storedConversation);
       setConversation(parsed);
-      sessionStorage.removeItem("judgeConversation");
     } catch (e) {
       console.error("Failed to parse stored conversation:", e);
       setError("Failed to load conversation history");
@@ -76,18 +112,64 @@ export default function JudgePage() {
   }, []);
 
   const handleScoreDebate = async () => {
+    if (!conversation.length || isScoring) return;
+
     setIsScoring(true);
     setError(null);
-    setJudgeOutput([]);
-
-    const controller = new AbortController();
-    controllerRef.current = controller;
+    setErrorDetails(null);
+    setStatusMessage("Loading the model…");
+    setJudgeResult(null);
 
     try {
+      const apiKey = process.env.NEXT_PUBLIC_OLLAMA_API_KEY;
+
+      const startResponse = await fetch("/api/ollama", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(apiKey ? { "X-API-Key": apiKey } : {}),
+        },
+        body: JSON.stringify({
+          action: "start",
+          model: selectedJudgeModel,
+        }),
+      });
+
+      const startRaw = await startResponse.text();
+
+      let startPayload: unknown = null;
+      if (startRaw) {
+        try {
+          startPayload = JSON.parse(startRaw);
+        } catch {
+          // ignore
+        }
+      }
+
+      const startRecord = isRecord(startPayload) ? startPayload : null;
+
+      if (!startResponse.ok) {
+        const message =
+          startRecord && typeof startRecord.error === "string"
+            ? startRecord.error || "Failed to prepare model"
+            : startRaw || "Failed to prepare model";
+        throw new Error(message);
+      }
+
+      if (startRecord && typeof startRecord.available === "boolean" && !startRecord.available) {
+        const message =
+          typeof startRecord.message === "string" ? startRecord.message : "Model could not be prepared for judging";
+        throw new Error(message);
+      }
+
+      setStatusMessage("Scoring the debate…");
+
       const response = await fetch("/api/judge", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          ...(apiKey ? { "X-API-Key": apiKey } : {}),
+        },
         body: JSON.stringify({
           model: selectedJudgeModel,
           systemPrompt,
@@ -95,121 +177,180 @@ export default function JudgePage() {
         }),
       });
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data?.error ?? "Failed to start judging");
-      }
+      const raw = await response.text();
 
-      if (!response.body) {
-        throw new Error("No response stream");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-
-          try {
-            const event = JSON.parse(trimmed) as StreamEvent;
-
-            switch (event.type) {
-              case "start":
-                setIsPulling(true);
-                break;
-
-              case "delta":
-                setIsPulling(false);
-                if (event.content) {
-                  if (!currentMessageIdRef.current) {
-                    const msgId = nextId("assistant");
-                    currentMessageIdRef.current = msgId;
-                    setJudgeOutput([{ id: msgId, role: "assistant", content: event.content }]);
-                  } else {
-                    const msgId = currentMessageIdRef.current;
-                    setJudgeOutput((prev) =>
-                      prev.map((msg) => (msg.id === msgId ? { ...msg, content: msg.content + event.content } : msg))
-                    );
-                  }
-                }
-                break;
-
-              case "complete":
-                setIsPulling(false);
-                currentMessageIdRef.current = null;
-                break;
-
-              case "error":
-                setIsPulling(false);
-                if (event.error) {
-                  setError(event.error);
-                }
-                break;
-            }
-          } catch {
-            continue;
+      let payload: unknown = null;
+      if (raw) {
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          if (response.ok) {
+            throw new Error("Judge response is not valid JSON");
           }
         }
       }
-    } catch (e) {
-      const isAbortError = e instanceof DOMException && e.name === "AbortError";
 
-      if (!isAbortError) {
-        setError(e instanceof Error ? e.message : "An error occurred");
+      const payloadRecord = isRecord(payload) ? payload : null;
+
+      if (!response.ok) {
+        const message =
+          payloadRecord && typeof payloadRecord.error === "string"
+            ? payloadRecord.error || "Failed to score debate"
+            : raw || "Failed to score debate";
+        const details = payloadRecord && typeof payloadRecord.snippet === "string" ? payloadRecord.snippet : null;
+        throw new JudgeRequestError(message, details || undefined);
       }
+
+      if (!payloadRecord || !("result" in payloadRecord)) {
+        throw new Error("Judge response is missing result data");
+      }
+
+      const resultCandidate = payloadRecord.result;
+      const resultRecord = isRecord(resultCandidate) ? resultCandidate : null;
+
+      if (!resultRecord) {
+        throw new Error("Judge result is malformed");
+      }
+
+      const candidate = resultRecord as Partial<JudgeResult>;
+
+      const topLevelKeys: Array<keyof JudgeResult> = ["modelA", "modelB", "winner", "text_feedback"];
+      for (const key of topLevelKeys) {
+        if (!(key in candidate)) {
+          throw new Error(`Judge result is missing ${key}`);
+        }
+      }
+
+      const parseBreakdown = (value: unknown, label: string): ScoreBreakdown => {
+        if (!value || typeof value !== "object") {
+          throw new Error(`${label} scores must be an object`);
+        }
+        const record = value as Record<string, unknown>;
+        const breakdown = {} as ScoreBreakdown;
+        for (const { key } of scoreFieldMeta) {
+          const rawScore = record[key];
+          // Accept numbers or numeric strings representing 1..10 scale
+          let score: number;
+          if (typeof rawScore === "number" && Number.isFinite(rawScore)) {
+            score = rawScore;
+          } else if (typeof rawScore === "string") {
+            const parsed = Number.parseFloat(rawScore);
+            if (Number.isFinite(parsed)) {
+              score = parsed;
+            } else {
+              throw new Error(`${label}.${key} score is invalid`);
+            }
+          } else {
+            throw new Error(`${label}.${key} score is invalid`);
+          }
+
+          if (!Number.isFinite(score)) {
+            throw new Error(`${label}.${key} score is invalid`);
+          }
+          if (score < 1 || score > 10) {
+            throw new Error(`${label}.${key} score must be between 1 and 10`);
+          }
+          breakdown[key] = score;
+        }
+        return breakdown;
+      };
+
+      const normalizeWinner = (value: unknown): WinnerLabel => {
+        if (typeof value !== "string" || !value.trim()) {
+          throw new Error("winner must be Model A, Model B, or Tie");
+        }
+        const normalized = value.trim().toLowerCase();
+        if (normalized === "model a" || normalized === "model_a" || normalized === "a") {
+          return "Model A";
+        }
+        if (normalized === "model b" || normalized === "model_b" || normalized === "b") {
+          return "Model B";
+        }
+        if (normalized === "tie" || normalized === "draw") {
+          return "Tie";
+        }
+        throw new Error("winner must be Model A, Model B, or Tie");
+      };
+
+      const textFeedback = String(candidate.text_feedback ?? "").trim();
+      if (!textFeedback) {
+        throw new Error("Judge feedback is empty");
+      }
+
+      // Thinking steps returned by the judge model (developer/debugging only)
+      let thinkingSteps: string | undefined = undefined;
+      if ("thinking_steps" in candidate) {
+        const raw = (candidate as Record<string, unknown>).thinking_steps;
+        if (typeof raw === "string") thinkingSteps = raw.trim();
+        else if (Array.isArray(raw)) thinkingSteps = raw.filter(Boolean).join("\n\n");
+      }
+
+      const result: JudgeResult = {
+        modelA: parseBreakdown(candidate.modelA, "Model A"),
+        modelB: parseBreakdown(candidate.modelB, "Model B"),
+        winner: normalizeWinner(candidate.winner),
+        text_feedback: textFeedback,
+        ...(thinkingSteps ? { thinking_steps: thinkingSteps } : {}),
+      };
+
+      setJudgeResult(result);
+      setError(null);
+      setErrorDetails(null);
+      setStatusMessage(null);
+    } catch (e) {
+      setJudgeResult(null);
+      if (e instanceof JudgeRequestError && e.details) {
+        setErrorDetails(e.details);
+      } else {
+        setErrorDetails(null);
+      }
+      setError(e instanceof Error ? e.message : "An error occurred");
+      setStatusMessage(null);
     } finally {
       setIsScoring(false);
-      controllerRef.current = null;
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-center gap-4 mb-8">
+    <div className={pageContainer}>
+      <div className={headerRow}>
         <Image src="/judge.svg" alt="Judge" width={64} height={64} />
-        <div className="flex flex-col gap-2">
-          <label htmlFor="judge-model" className="mb-1 px-3 text-sm font-medium text-zinc-700">
-            Select Judge Model
+        <div className={`${colStack} gap-2`}>
+          <label htmlFor="judge-model" className="my-1 px-3 text-sm font-medium text-zinc-700">
+            Select a thinking model to &nbsp;{" "}
+            <SendButton onClick={handleScoreDebate} disabled={isScoring || !conversation.length}>
+              Score
+            </SendButton>
           </label>
           <SelectWithDisabled
             id="judge-model"
             value={selectedJudgeModel}
             onChange={setSelectedJudgeModel}
             disabled={isScoring}
-          />
+            options={THINKING_MODELS}
+          />{" "}
         </div>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="flex flex-col">
-          <h2 className={sectionHeadingClass}>Conversation History</h2>
-          <div className={`${cardClass} flex-1 overflow-auto max-h-[600px]`}>
+      <div className={gridTwoCol}>
+        <div className={colStack}>
+          <h2 className={sectionHeading}>Last Conversation</h2>
+          <div className={`${card} flex-1 overflow-auto`}>
             {conversation.length ? (
               <ConversationLayout conversation={conversation} useModelLabels={true} labelA="Model A" labelB="Model B" />
             ) : (
-              <p className="text-sm text-zinc-500">
+              <p className={mutedSm}>
                 No conversation history available. Please start a debate from the{" "}
                 <a href="/clash" className="text-blue-600">
-                  /clash page
+                  /clash
                 </a>{" "}
-                first.
+                page first.
               </p>
             )}
           </div>
         </div>
 
-        <div className="flex flex-col">
-          <h2 className={sectionHeadingClass}>Judge Configuration</h2>
+        <div className={colStack}>
+          <h2 className={sectionHeading}>Judge Configuration</h2>
           <div className="[&>label>:first-child]:hidden">
             <PromptTextarea
               label="System Prompt"
@@ -219,23 +360,151 @@ export default function JudgePage() {
               confirmOnBlur={false}
             />
           </div>
+
+          {(isScoring || judgeResult) && (
+            <div className={`mt-2 ${card}`}>
+              {statusMessage && (
+                <div className={`${card} text-center`}>
+                  <p className="text-sky-700">{statusMessage}</p>
+                </div>
+              )}
+              {error && <div className={errorAlert}>{error}</div>}
+              {errorDetails && (
+                <details className={`${card} ${mutedXs}`}>
+                  <summary className={`cursor-pointer select-none ${mutedXs}`}>Error details</summary>
+                  <pre className="mt-2 whitespace-pre-wrap rounded bg-zinc-100 p-2 text-[11px] leading-4 text-zinc-800">
+                    {errorDetails}
+                  </pre>
+                </details>
+              )}
+              {judgeResult && (
+                <>
+                  <h2 className={sectionHeading}>Judge&apos;s Verdict</h2>
+                  <div className="rounded-md bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-800">
+                    <span className="font-semibold">{judgeResult.winner}</span>
+                  </div>
+                  <div className="mt-3 overflow-auto flex justify-center">
+                    {(() => {
+                      const totalA = scoreFieldMeta.reduce((s, { key }) => s + (judgeResult.modelA[key] ?? 0), 0);
+                      const totalB = scoreFieldMeta.reduce((s, { key }) => s + (judgeResult.modelB[key] ?? 0), 0);
+                      const diff = totalA - totalB;
+                      const leader = diff === 0 ? "Tie" : diff > 0 ? "A" : "B";
+                      // derive first and second for Diff column
+                      const first = leader !== "Tie" ? leader : "A";
+                      const second = leader === "B" ? "A" : "B";
+                      return (
+                        <div className={`mt-4 mx-auto w-full md:max-w-[400px] ${card}`}>
+                          <div className="overflow-auto">
+                            <table className="w-full text-sm table-fixed border-collapse">
+                              <thead>
+                                <tr>
+                                  <th className={tableHeader}>Criterium</th>
+                                  <th className={tableHeader}>Model A</th>
+                                  <th className={tableHeader}>Model B</th>
+                                  <th className={tableHeader}>
+                                    {first} &ndash; {second}
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {scoreFieldMeta.map(({ key, label }) => {
+                                  const winnerScore = judgeResult[`model${first}`][key];
+                                  const loserScore = judgeResult[`model${second}`][key];
+                                  const colorClass =
+                                    winnerScore > loserScore
+                                      ? "text-emerald-700"
+                                      : winnerScore < loserScore
+                                      ? "text-rose-600"
+                                      : "text-zinc-700";
+                                  const diffText = `${(winnerScore - loserScore).toFixed(1)}`;
+                                  return (
+                                    <tr key={key} className="odd:bg-white even:bg-zinc-50">
+                                      <td className={tableCell}>{label}</td>
+                                      <td className={tableCell}>{judgeResult.modelA[key].toFixed(1)}</td>
+                                      <td className={tableCell}>{judgeResult.modelB[key].toFixed(1)}</td>
+                                      <td className={`px-3 py-2 text-center font-medium ${colorClass}`}>{diffText}</td>
+                                    </tr>
+                                  );
+                                })}
+
+                                <tr className="border-t">
+                                  <td />
+                                  <td className={tableCell}>{totalA.toFixed(1)}</td>
+                                  <td className={tableCell}>{totalB.toFixed(1)}</td>
+                                  <td />
+                                </tr>
+
+                                <tr>
+                                  <td />
+                                  <td colSpan={3} className="px-3 py-2 text-xs text-zinc-600">
+                                    {diff === 0
+                                      ? "The models were evaluated equally"
+                                      : `${diff > 0 ? "Model A" : "Model B"} leads by ${Math.abs(diff).toFixed(
+                                          1
+                                        )} points (${(
+                                          (Math.abs(diff) / Math.max(1, (totalA + totalB) / 2)) *
+                                          100
+                                        ).toFixed(1)}%)`}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Feedback</div>
+                    <p className="whitespace-pre-wrap text-sm text-zinc-800">{judgeResult.text_feedback}</p>
+                  </div>
+                  {isDev && judgeResult.thinking_steps && (
+                    <div className="mt-4 space-y-2">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                        Chain of thoughts
+                      </div>
+                      {/* Render thinking steps. If the judge returned an array, show each array item as a step. If a string was returned, split by newlines. */}
+                      {(() => {
+                        const raw = judgeResult.thinking_steps;
+                        let steps: string[] = [];
+                        if (Array.isArray(raw)) {
+                          steps = raw as string[];
+                        } else if (typeof raw === "string") {
+                          const parts = raw
+                            .split(/\n\n+/)
+                            .map((p: string) => p.trim())
+                            .filter(Boolean);
+                          steps = parts.length
+                            ? parts
+                            : raw
+                                .split(/\n+/)
+                                .map((l: string) => l.trim())
+                                .filter(Boolean);
+                        }
+                        return (
+                          <ol className="ml-4 list-decimal space-y-1 text-sm text-zinc-800">
+                            {steps.map((step: string, i: number) => (
+                              <li key={i} className="whitespace-pre-wrap">
+                                {step}
+                              </li>
+                            ))}
+                          </ol>
+                        );
+                      })()}
+                    </div>
+                  )}
+                  <details className="mt-4 text-xs text-zinc-500">
+                    <summary className="cursor-pointer select-none text-xs font-medium text-zinc-600">Raw JSON</summary>
+                    <pre className="mt-2 whitespace-pre-wrap rounded bg-zinc-100 p-2 text-[11px] leading-4 text-zinc-800">
+                      {JSON.stringify(judgeResult, null, 2)}
+                    </pre>
+                  </details>{" "}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
-
-      <div className="text-center mb-6">
-        <SendButton onClick={handleScoreDebate} disabled={isScoring || !conversation.length}>
-          {isPulling ? "Pulling model..." : isScoring ? "Scoring..." : "Score the debate"}
-        </SendButton>
-      </div>
-
-      {error && <div className={errorClass}>{error}</div>}
-
-      {judgeOutput.length > 0 && (
-        <div className={cardClass}>
-          <h2 className={sectionHeadingClass}>Judge&apos;s Verdict</h2>
-          <ConversationLayout conversation={judgeOutput} useModelLabels={false} />
-        </div>
-      )}
     </div>
   );
 }
