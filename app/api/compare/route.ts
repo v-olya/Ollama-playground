@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getMessage } from "@/app/helpers/functions";
-import { ensureModelStopped, isModelPulled } from "../ollama/utils";
+import { ensureModelStopped, isModelPulled, postToUpstreamChat } from "../ollama/utils";
 
 // Per-model replace-in-flight gate: latest wins
 const activeByModel = new Map<
@@ -156,29 +156,21 @@ export async function POST(request: Request) {
     timeoutControllerRef.signal.addEventListener("abort", onTimeoutAbort);
     timeoutId = setTimeout(() => timeoutControllerRef.abort(), timeoutMs);
 
-    const upstream = await fetch(`${baseUrl}/api/chat`, {
-      method: "POST",
-      headers: upstreamHeaders,
-      signal: (() => {
-        // Merge request-driven and timeout-driven aborts
-        const merged = new AbortController();
-        const onAbort1 = () => merged.abort();
-        const onAbort2 = () => merged.abort();
-        controllerRef.signal.addEventListener("abort", onAbort1);
-        timeoutControllerRef.signal.addEventListener("abort", onAbort2);
-        // Clean up listeners when merged aborts
-        merged.signal.addEventListener("abort", () => {
-          controllerRef.signal.removeEventListener("abort", onAbort1);
-          timeoutControllerRef.signal.removeEventListener("abort", onAbort2);
-        });
-        return merged.signal;
-      })(),
-      body: JSON.stringify({
-        model,
-        messages: rawMessages,
-        stream: true,
-      }),
+    // Merge request-driven and timeout-driven aborts into a single signal
+    const mergedController = new AbortController();
+    const onAbort1 = () => mergedController.abort();
+    const onAbort2 = () => mergedController.abort();
+    controllerRef.signal.addEventListener("abort", onAbort1);
+    timeoutControllerRef.signal.addEventListener("abort", onAbort2);
+    mergedController.signal.addEventListener("abort", () => {
+      controllerRef.signal.removeEventListener("abort", onAbort1);
+      timeoutControllerRef.signal.removeEventListener("abort", onAbort2);
     });
+
+    const upstream = await postToUpstreamChat(
+      { model, messages: rawMessages, stream: true },
+      mergedController.signal
+    );
 
     if (timeoutId) {
       clearTimeout(timeoutId);

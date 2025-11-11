@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getMessage } from "@/app/helpers/functions";
-import { ensureModelStopped, isModelPulled } from "../ollama/utils";
+import { ensureModelStopped, isModelPulled, postToUpstreamChat } from "../ollama/utils";
 
 type Message = {
   role: "system" | "user" | "assistant";
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   let modelA = "";
   let modelB = "";
   let aborted = false;
-  let modelsToStop: Set<string> = new Set();
+  const modelsToStop: Set<string> = new Set();
 
   const cleanup = async () => {
     const stopPromises: Promise<void>[] = [];
@@ -100,13 +100,6 @@ export async function POST(request: Request) {
     modelsToStop.add(modelA);
     modelsToStop.add(modelB);
 
-    const baseUrl = (process.env["BASE_URL"]?.trim() || "localhost:11434").replace(/\/$/, "");
-    const upstreamHeaders: Record<string, string> = { "Content-Type": "application/json" };
-
-    if (process.env.NEXT_PUBLIC_OLLAMA_API_KEY?.trim()) {
-      upstreamHeaders["X-API-Key"] = process.env.NEXT_PUBLIC_OLLAMA_API_KEY.trim();
-    }
-
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
@@ -144,16 +137,7 @@ export async function POST(request: Request) {
               });
             }
 
-            const response = await fetch(`${baseUrl}/api/chat`, {
-              method: "POST",
-              headers: upstreamHeaders,
-              signal: request.signal,
-              body: JSON.stringify({
-                model: currentModel,
-                messages,
-                stream: true,
-              }),
-            });
+            const response = await postToUpstreamChat({ model: currentModel, messages, stream: true }, request.signal);
 
             if (!response.ok) {
               const errText = await response.text().catch(() => "");
@@ -209,7 +193,7 @@ export async function POST(request: Request) {
                     fullContent += delta;
                     sendEvent({ type: "delta", content: delta, speaker, turn });
                   }
-                } catch (parseErr) {
+                } catch {
                   continue;
                 }
               }
