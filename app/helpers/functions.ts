@@ -44,8 +44,13 @@ export async function sendOllamaAction(
   } catch (err) {
     const aborted =
       (err instanceof DOMException && err.name === "AbortError") ||
-      (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError");
+      (typeof err === "object" && err !== null && (err as { name?: unknown }).name === "AbortError");
     if (aborted) return { aborted: true };
     throw err;
   }
 }
+
+// Helper to detect an AbortError in a cross-browser-friendly way
+export const isAbortError = (err: unknown): boolean =>
+  (typeof DOMException !== "undefined" && err instanceof DOMException && (err as DOMException).name === "AbortError") ||
+  (typeof err === "object" && err !== null && (err as { name?: unknown }).name === "AbortError");
