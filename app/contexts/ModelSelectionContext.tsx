@@ -49,6 +49,15 @@ export const MODEL_OPTIONS = [
   },
 ];
 
+export const THINKING_MODELS = [
+  { value: "qwen3-coder:480b-cloud" },
+  {
+    value: "gpt-oss:120b-cloud",
+  },
+  {
+    value: "gpt-oss:20b-cloud",
+  },
+];
 const ModelSelectionContext = createContext<ModelSelection | undefined>(undefined);
 
 export function useModelSelection() {

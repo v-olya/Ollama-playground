@@ -9,7 +9,8 @@ interface SelectWithDisabledProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   disabledOption?: string;
-  // optional extra classes to apply to the select element
+  // optional list to render instead of the default MODEL_OPTIONS
+  options?: Array<{ value: string }>;
   className?: string;
 }
 
@@ -19,8 +20,10 @@ export function SelectWithDisabled({
   onChange,
   disabled = false,
   disabledOption,
+  options,
   className,
 }: SelectWithDisabledProps) {
+  const opts = options ?? MODEL_OPTIONS;
   return (
     <select
       id={id}
@@ -29,7 +32,7 @@ export function SelectWithDisabled({
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
     >
-      {MODEL_OPTIONS.map((option) => {
+      {opts.map((option) => {
         const optionValue = option.value;
         const isDisabled = disabledOption === optionValue;
 
