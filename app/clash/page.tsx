@@ -149,15 +149,13 @@ export default function Page() {
     <>
       <h1 className={`${heading1} mb-12`}>Explore AI-to-AI interactions</h1>
       <div className="grid grid-cols-[1fr_auto] gap-4 w-full px-4 md:flex md:flex-row md:items-center md:justify-center">
-        {/* On small screens: Select A + Swap on one row, Select B on the next full-width row.
-            On md+: behave as a horizontal row: Select A, Swap, Select B. */}
         <div className="w-full">
           <SelectWithDisabled
             id="modelA"
             value={selectedModelA}
             onChange={handleModelAChange}
             disabledOption={selectedModelB}
-            className="w-full max-w-[220px] md:w-auto"
+            className="w-full max-w-[280px] md:w-auto"
           />
         </div>
 

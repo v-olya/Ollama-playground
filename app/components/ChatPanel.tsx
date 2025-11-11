@@ -324,7 +324,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   );
 
   return (
-    <section className={`flex h-full w-full flex-col gap-3 ${card} p-4`}>
+    <section className={`flex h-full w-full flex-col gap-3 ${card}`}>
       <header className="flex flex-col gap-2 text-center">
         <div className="flex flex-col gap-1 text-right">
           <label htmlFor={`model${mode}`} className="py-1 tracking-wide text-xs font-semibold uppercase text-zinc-500">

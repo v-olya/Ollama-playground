@@ -353,7 +353,7 @@ export function DialogueUncontrolled({
   };
 
   return (
-    <section className={`flex w-full flex-col gap-3 ${card} p-4`}>
+    <section className={`flex w-full flex-col gap-3 ${card}`}>
       <header className="flex flex-col gap-2 text-center">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold tracking-wide text-zinc-700">AI-to-AI Dialogue</h3>
