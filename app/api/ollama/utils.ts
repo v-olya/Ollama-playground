@@ -75,3 +75,27 @@ export async function ensureModelStopped(model: string): Promise<StopOutcome> {
   inflightStops.set(key, stopPromise);
   return stopPromise;
 }
+
+export async function postToUpstreamChat(
+  payload: unknown,
+  signal?: AbortSignal,
+  options?: { keepalive?: boolean }
+): Promise<Response> {
+  const { baseUrl, upstreamHeaders } = getUpstreamConfig();
+  const res = await fetch(`${baseUrl}/api/chat`, {
+    method: "POST",
+    headers: upstreamHeaders,
+    signal,
+    keepalive: options?.keepalive,
+    body: JSON.stringify(payload),
+  });
+  return res;
+}
+
+function getUpstreamConfig() {
+  const baseUrl = (process.env["BASE_URL"]?.trim() || "localhost:11434").replace(/\/$/, "");
+  const upstreamHeaders: Record<string, string> = { "Content-Type": "application/json" };
+  const apiKey = process.env.NEXT_PUBLIC_OLLAMA_API_KEY?.trim();
+  if (apiKey) upstreamHeaders["X-API-Key"] = apiKey;
+  return { baseUrl, upstreamHeaders } as const;
+}
