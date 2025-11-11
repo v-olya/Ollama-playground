@@ -54,3 +54,25 @@ export async function sendOllamaAction(
 export const isAbortError = (err: unknown): boolean =>
   (typeof DOMException !== "undefined" && err instanceof DOMException && (err as DOMException).name === "AbortError") ||
   (typeof err === "object" && err !== null && (err as { name?: unknown }).name === "AbortError");
+
+// Extract an error message from a non-OK Response if possible.
+// Tries to parse JSON { error: string } first, then falls back to text.
+export async function extractResponseError(res?: Response): Promise<string | undefined> {
+  if (!res) return undefined;
+  try {
+    const data = await res.json();
+    if (
+      data &&
+      typeof data === "object" &&
+      "error" in data &&
+      typeof (data as Record<string, unknown>).error === "string"
+    ) {
+      return (data as Record<string, unknown>).error as string;
+    }
+  } catch {}
+  try {
+    const text = await res.text();
+    if (text) return text;
+  } catch {}
+  return undefined;
+}

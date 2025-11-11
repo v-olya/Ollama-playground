@@ -6,7 +6,7 @@ import { SelectWithDisabled } from "./SelectWithDisabled";
 import { ConversationLayout } from "./ConversationLayout";
 import { type ActionKey, type Message } from "../helpers/types";
 import { CODING_MODELS, useModelSelection } from "../contexts/ModelSelectionContext";
-import { getMessage, nextId } from "../helpers/functions";
+import { getMessage, nextId, isAbortError, sendOllamaAction, extractResponseError } from "../helpers/functions";
 import { secondaryButtonClass, formInput, card } from "../helpers/twClasses";
 
 interface ChatPanelProps {
@@ -40,6 +40,8 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         return { aborted: false };
       }
 
+      // If we have a pending start for the model we're trying to stop,
+      // abort the pending controller and avoid sending an extra network stop when the start hasn't completed.
       if (action === "stop") {
         const pending = pendingStartRef.current;
         if (pending && pending.model === model) {
@@ -53,49 +55,41 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         }
       }
 
+      // Create a controller only for start requests so we can cancel a pending start.
       const controller = action === "start" ? new AbortController() : null;
 
       if (controller) {
+        // Cancel any previously pending start and record this one.
         pendingStartRef.current?.controller.abort();
         pendingStartRef.current = { model, controller };
       }
 
       try {
-        const res = await fetch("/api/ollama", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": process.env.NEXT_PUBLIC_OLLAMA_API_KEY || "",
-          },
-          body: JSON.stringify({ action, model }),
+        // The shared helper returns { aborted, response }.
+        const result = await sendOllamaAction(action, model, {
           signal: controller?.signal,
           keepalive: options?.keepalive,
         });
-        if (!res.ok) {
-          let errorMessage: string | undefined;
-          try {
-            const data = await res.json();
-            errorMessage = data?.error ?? JSON.stringify(data);
-          } catch {
-            try {
-              errorMessage = await res.text();
-            } catch {
-              errorMessage = undefined;
-            }
-          }
-          throw new Error(errorMessage || `Request failed with status ${res.status}`);
+        if (result.aborted || controller?.signal.aborted) return { aborted: true };
+
+        const res = result.response;
+        if (!res?.ok) {
+          const errorMessage =
+            (await extractResponseError(res)) ?? `Request failed with status ${res?.status ?? "unknown"}`;
+          throw new Error(errorMessage);
         }
+
         return { aborted: false };
       } catch (err) {
-        const aborted =
-          !!controller?.signal.aborted ||
-          (err instanceof DOMException && err.name === "AbortError") ||
-          (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError");
+        // sendOllamaAction should've returned { aborted: true } for AbortErrors,
+        // but ... double-check here.
+        const aborted = !!controller?.signal.aborted || isAbortError(err);
         if (aborted) {
           return { aborted: true };
         }
         throw err;
       } finally {
+        // Clear pendingStartRef only if it's still pointing at our controller.
         if (controller && pendingStartRef.current?.controller === controller) {
           pendingStartRef.current = null;
         }
@@ -251,10 +245,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         setConversation((prev) => [...prev, assistantMessage]);
       }
     } catch (err) {
-      const isAbort =
-        (err instanceof DOMException && err.name === "AbortError") ||
-        (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError") ||
-        controller.signal.aborted;
+      const isAbort = isAbortError(err) || controller.signal.aborted;
       if (isAbort) {
         // user-triggered abort; don't surface as an error
         return;

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getMessage } from "@/app/helpers/functions";
-import { ensureModelStopped, isModelPulled, postToUpstreamChat } from "../ollama/utils";
+import { ensureModelStopped, isModelPulled, postToOllamaChat } from "../ollama/utils";
 
 // Per-model replace-in-flight gate: latest wins
 const activeByModel = new Map<
@@ -167,10 +167,7 @@ export async function POST(request: Request) {
       timeoutControllerRef.signal.removeEventListener("abort", onAbort2);
     });
 
-    const upstream = await postToUpstreamChat(
-      { model, messages: rawMessages, stream: true },
-      mergedController.signal
-    );
+    const upstream = await postToOllamaChat({ model, messages: rawMessages, stream: true }, mergedController.signal);
 
     if (timeoutId) {
       clearTimeout(timeoutId);

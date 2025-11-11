@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { ConversationLayout } from "./ConversationLayout";
 import { secondaryButtonClass, primaryButtonBase, card } from "../helpers/twClasses";
 import { type Message } from "../helpers/types";
-import { getMessage, nextId } from "../helpers/functions";
+import { getMessage, nextId, sendOllamaAction, isAbortError, extractResponseError } from "../helpers/functions";
 import Link from "next/link";
 
 interface DialogueUncontrolledProps {
@@ -171,10 +171,7 @@ export function DialogueUncontrolled({
           }
         }
       } catch (err) {
-        const isAbort =
-          (err instanceof DOMException && err.name === "AbortError") ||
-          (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError") ||
-          controller.signal.aborted;
+        const isAbort = isAbortError(err) || controller.signal.aborted;
 
         if (!isAbort) {
           setError(getMessage(err));
@@ -206,47 +203,32 @@ export function DialogueUncontrolled({
     pullControllerRef.current = pullController;
 
     try {
-      const [resA, resB] = await Promise.all([
-        fetch("/api/ollama", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": process.env.NEXT_PUBLIC_OLLAMA_API_KEY || "",
-          },
-          signal: pullController.signal,
-          body: JSON.stringify({ action: "start", model: modelA }),
-        }),
-        fetch("/api/ollama", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": process.env.NEXT_PUBLIC_OLLAMA_API_KEY || "",
-          },
-          signal: pullController.signal,
-          body: JSON.stringify({ action: "start", model: modelB }),
-        }),
+      const [a, b] = await Promise.all([
+        sendOllamaAction("start", modelA, { signal: pullController.signal }),
+        sendOllamaAction("start", modelB, { signal: pullController.signal }),
       ]);
 
-      if (pullController.signal.aborted) {
+      // If the pull was aborted, exit silently
+      if (pullController.signal.aborted || a.aborted || b.aborted) {
         setIsLoading(false);
         pullControllerRef.current = null;
         return;
       }
 
-      if (!resA.ok) {
-        const dataA = await resA.json();
-        throw new Error(`Model A (${modelA}): ${dataA?.error ?? "Failed to start"}`);
+      const resA = a.response;
+      const resB = b.response;
+
+      if (!resA?.ok) {
+        const msgA = (await extractResponseError(resA)) ?? "Failed to start";
+        throw new Error(`Model A (${modelA}): ${msgA}`);
       }
 
-      if (!resB.ok) {
-        const dataB = await resB.json();
-        throw new Error(`Model B (${modelB}): ${dataB?.error ?? "Failed to start"}`);
+      if (!resB?.ok) {
+        const msgB = (await extractResponseError(resB)) ?? "Failed to start";
+        throw new Error(`Model B (${modelB}): ${msgB}`);
       }
     } catch (err) {
-      const isAbort =
-        (err instanceof DOMException && err.name === "AbortError") ||
-        (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError") ||
-        pullController.signal.aborted;
+      const isAbort = isAbortError(err) || pullController.signal.aborted;
 
       if (!isAbort) {
         setError(getMessage(err));

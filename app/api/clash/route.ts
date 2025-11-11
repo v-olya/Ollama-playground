@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getMessage } from "@/app/helpers/functions";
-import { ensureModelStopped, isModelPulled, postToUpstreamChat } from "../ollama/utils";
+import { ensureModelStopped, isModelPulled, postToOllamaChat } from "../ollama/utils";
 
 type Message = {
   role: "system" | "user" | "assistant";
@@ -137,7 +137,7 @@ export async function POST(request: Request) {
               });
             }
 
-            const response = await postToUpstreamChat({ model: currentModel, messages, stream: true }, request.signal);
+            const response = await postToOllamaChat({ model: currentModel, messages, stream: true }, request.signal);
 
             if (!response.ok) {
               const errText = await response.text().catch(() => "");

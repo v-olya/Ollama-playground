@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getMessage } from "@/app/helpers/functions";
-import { ensureModelStopped } from "../ollama/utils";
+import { ensureModelStopped, postToOllamaChat } from "../ollama/utils";
 import { spawn } from "node:child_process";
 
 async function pullModelWithAbort(model: string, signal: AbortSignal): Promise<"ok" | "aborted" | "error"> {
@@ -257,18 +257,11 @@ CRITICAL: Use these EXACT key names: "modelA", "modelB" (camelCase), do NOT any 
       },
       { role: "user" as const, content: userPrompt },
     ];
-    const response = await fetch("http://localhost:11434/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: request.signal,
-      body: JSON.stringify({
-        model,
-        messages,
-        stream: false,
-        format: "json",
-        options: { temperature: 0.2 },
-      }),
-    });
+
+    const response = await postToOllamaChat(
+      { model, messages, stream: false, format: "json", options: { temperature: 0.2 } },
+      request.signal
+    );
 
     if (!response.ok) {
       const errText = await response.text().catch(() => "");

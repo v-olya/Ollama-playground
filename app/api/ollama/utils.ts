@@ -76,12 +76,12 @@ export async function ensureModelStopped(model: string): Promise<StopOutcome> {
   return stopPromise;
 }
 
-export async function postToUpstreamChat(
+export async function postToOllamaChat(
   payload: unknown,
   signal?: AbortSignal,
   options?: { keepalive?: boolean }
 ): Promise<Response> {
-  const { baseUrl, upstreamHeaders } = getUpstreamConfig();
+  const { baseUrl, upstreamHeaders } = getOllamaConfig();
   const res = await fetch(`${baseUrl}/api/chat`, {
     method: "POST",
     headers: upstreamHeaders,
@@ -92,7 +92,7 @@ export async function postToUpstreamChat(
   return res;
 }
 
-function getUpstreamConfig() {
+function getOllamaConfig() {
   const baseUrl = (process.env["BASE_URL"]?.trim() || "localhost:11434").replace(/\/$/, "");
   const upstreamHeaders: Record<string, string> = { "Content-Type": "application/json" };
   const apiKey = process.env.NEXT_PUBLIC_OLLAMA_API_KEY?.trim();
