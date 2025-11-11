@@ -30,7 +30,7 @@ const defaultSystem = `You are an impartial AI judge tasked with evaluating a di
 • Engagement – Does it invite further dialogue or challenge ideas constructively?
 • Creativity – Does it offer original ideas, metaphors, or surprising insights?
 
-Determine the winner based on total scores. If scores differ by less than 5%, it's a tie. Provide constructive feedback on strengths and weaknesses. Respond with JSON in the provided structure. Choose a slightly playful tone for your text_feedback. Include your thoughts as s thinking_steps field.`;
+Determine the winner based on total scores. If scores differ by less than 5%, it's a tie; otherwise, you must declare a winner. Provide constructive feedback on strengths and weaknesses. Respond with JSON in the provided structure. Choose a faintly playful tone for your text_feedback.`;
 
 type ScoreKey = "relevance" | "clarity" | "depth" | "engagement" | "creativity";
 
@@ -341,7 +341,15 @@ export default function JudgePage() {
       </div>
       <div className={gridTwoCol}>
         <div className={colStack}>
-          <h2 className={sectionHeading}>{modelA && modelB ? `${modelA} VS ${modelB}` : "Last Conversation"}</h2>
+          <h2 className={sectionHeading}>
+            {modelA && modelB ? (
+              <>
+                {modelA} <span className="text-red-700">&nbsp;VS&nbsp;</span> {modelB}
+              </>
+            ) : (
+              "Last Conversation"
+            )}
+          </h2>
           <div className={`${card} flex-1 overflow-auto`}>
             {conversation.length ? (
               <ConversationLayout conversation={conversation} useModelLabels={true} labelA="Model A" labelB="Model B" />
@@ -422,7 +430,7 @@ export default function JudgePage() {
                                     winnerScore > loserScore
                                       ? "text-emerald-700"
                                       : winnerScore < loserScore
-                                      ? "text-rose-600"
+                                      ? "text-red-600"
                                       : "text-zinc-700";
                                   const diffText = `${(winnerScore - loserScore).toFixed(1)}`;
                                   return (
