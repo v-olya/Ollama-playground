@@ -142,11 +142,8 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
       role: "user",
       content: trimmed,
     };
-
-    setConversation((prev) => {
-      const next = [...prev, userMessage];
-      return next;
-    });
+    // Don't append the user message until the model is confirmed to be running
+    let nextConversation: Message[] = [];
     setInput("");
     setError(null);
 
@@ -154,15 +151,28 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
     try {
       setIsLoading(true);
       if (skipNextStartRef.current) {
+        // Send already started the model
         skipNextStartRef.current = false;
       } else {
         const result = await sendAction("start", runModel);
         if (result.aborted) {
           return;
         }
+        // Model is now loaded and ready
+        runningModelRef.current = runModel;
       }
-      // Model is now loaded and ready
-      runningModelRef.current = runModel;
+      // Guard against adding the same user prompt twice in a row
+      setConversation((prev) => {
+        if (prev.length > 0) {
+          const last = prev[prev.length - 1];
+          if (last.role === "user" && last.content === userMessage.content) {
+            nextConversation = prev;
+            return prev;
+          }
+        }
+        nextConversation = [...prev, userMessage];
+        return nextConversation;
+      });
     } catch (err) {
       setError(getMessage(err));
       return;
@@ -170,7 +180,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
       setIsLoading(false);
     }
 
-    const payloadMessages = [{ role: "system", content: systemPrompt }, ...conversation, userMessage];
+    const payloadMessages = [{ role: "system", content: systemPrompt }, ...nextConversation, userMessage];
     if (process.env.NODE_ENV !== "production") {
       console.log("Payload messages:", payloadMessages);
     }
@@ -261,7 +271,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         }
       }
     }
-  }, [conversation, input, selectedModel, systemPrompt, userPrompt, sendAction]);
+  }, [input, selectedModel, systemPrompt, userPrompt, sendAction]);
 
   // expose an imperative handle so parent can trigger actions
   useImperativeHandle(
