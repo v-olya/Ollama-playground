@@ -20,9 +20,8 @@ type ModelSelection = {
 export type Option = { value: string };
 export type ModelOptions = Option[];
 export const DEFAULT_MODELS = [
-  { value: "deepseek-r1:1.5b" },
-  { value: "deepseek-r1:1.5b-qwen-distill-fp16" },
   { value: "deepseek-v3.1:671b-cloud" },
+  { value: "deepseek-r1:1.5b-qwen-distill-fp16" },
   { value: "gemma3:4b" },
   { value: "glm-4.6:cloud" },
   { value: "gpt-oss:120b-cloud" },
@@ -46,9 +45,8 @@ export const CODING_MODELS = [
 ];
 
 export const THINKING_MODELS = [
-  { value: "deepseek-r1:1.5b" },
-  { value: "deepseek-r1:1.5b-qwen-distill-fp16" },
   { value: "deepseek-v3.1:671b-cloud" },
+  { value: "deepseek-r1:1.5b-qwen-distill-fp16" },
   { value: "gpt-oss:120b-cloud" },
   { value: "gpt-oss:20b-cloud" },
   { value: "qwen3-coder:480b-cloud" },
