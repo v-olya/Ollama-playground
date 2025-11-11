@@ -64,8 +64,8 @@ function TwoChatsLayoutContent() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl p-6">
-      <div className="mb-4 grid gap-4">
+    <div className="mx-auto w-full max-w-7xl p-6">
+      <div className="mb-4 mx-auto w-full max-w-2xl grid gap-4">
         <PromptTextarea
           label="System prompt"
           value={systemPrompt}
