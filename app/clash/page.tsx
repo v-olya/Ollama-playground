@@ -118,10 +118,10 @@ export default function Page() {
   ];
 
   const collaborativePrompt = `You are an AI language model engaged in a collaborative dialogue with another AI, not a human. Your goal is to explore ideas and share insights. Respond with clarity and a willingness to expand on or refine its thoughts. Avoid repetition, aim to complement the conversation.
-IMPORTANT: your answer must be 1-2 sentences long; the conversation will be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
+IMPORTANT: You must respond with one or two sentences. The conversation will be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
 
   const competitivePrompt = `You are an AI language model engaged in a formal debate with another AI, not a human. Be assertive and intellectually rigorous. Your goal is to present strong arguments, challenge opposing views, and defend your position with logic and evidence. 
-IMPORTANT: your answer must be 1-2 sentences long; the conversation will be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
+IMPORTANT: You must respond with one or two sentences. The conversation will be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
 
   const startDisabled =
     !systemPrompt.trim().length || !userPrompt.trim().length || (isSystemCommitted && !isChatComplete);
