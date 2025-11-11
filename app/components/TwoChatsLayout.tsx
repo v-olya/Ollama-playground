@@ -5,7 +5,7 @@ import { ChatPanel } from "./ChatPanel";
 import { SendButton } from "./SendButton";
 import { PromptTextarea } from "./PromptTextarea";
 import { ModelSelectionProvider, useModelSelection } from "../contexts/ModelSelectionContext";
-import { secondaryButtonClass } from "../helpers/buttonClasses";
+import { secondaryButtonClass } from "../helpers/twClasses";
 import { confirmBeforeChange } from "../helpers/functions";
 
 const DEFAULT_SYSTEM_PROMPT =

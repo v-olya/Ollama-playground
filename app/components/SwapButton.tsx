@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { secondaryButtonClass } from "../helpers/buttonClasses";
+import { secondaryButtonClass } from "../helpers/twClasses";
 
 interface SwapButtonProps {
   onClick?: () => void;

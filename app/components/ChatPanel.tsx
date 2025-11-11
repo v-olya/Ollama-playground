@@ -7,7 +7,7 @@ import { ConversationLayout } from "./ConversationLayout";
 import { type ActionKey, type Message } from "../helpers/types";
 import { useModelSelection } from "../contexts/ModelSelectionContext";
 import { getMessage, nextId } from "../helpers/functions";
-import { secondaryButtonClass } from "../helpers/buttonClasses";
+import { secondaryButtonClass, formInput, card } from "../helpers/twClasses";
 
 interface ChatPanelProps {
   systemPrompt: string;
@@ -324,13 +324,13 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   );
 
   return (
-    <section className="flex h-full w-full flex-col gap-3 rounded-md border border-zinc-200 bg-white p-4 shadow-sm">
+    <section className={`flex h-full w-full flex-col gap-3 ${card} p-4`}>
       <header className="flex flex-col gap-2 text-center">
         <div className="flex flex-col gap-1 text-right">
           <label htmlFor={`model${mode}`} className="py-1 tracking-wide text-xs font-semibold uppercase text-zinc-500">
             Model {mode}
           </label>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <SelectWithDisabled
               id={`model${mode}`}
               value={selectedModel}
@@ -359,11 +359,12 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
                 }
               }}
               disabled={isLoading}
+              className="flex-1 min-w-0"
               disabledOption={mode === "A" ? selectedB : selectedA}
             />
-            <div className="flex items-center">
+            <div className="flex items-center shrink-0">
               <button
-                className={secondaryButtonClass}
+                className={`${secondaryButtonClass} shrink-0`}
                 disabled={!selectedModel}
                 onClick={async () => {
                   if (!selectedModel) return;
@@ -395,7 +396,7 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
 
       <div className="mt-1 flex gap-3">
         <input
-          className="flex-1 rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-300"
+          className={`flex-1 ${formInput}`}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Your query"

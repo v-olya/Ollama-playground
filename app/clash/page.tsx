@@ -6,7 +6,7 @@ import { SelectWithDisabled } from "../components/SelectWithDisabled";
 import { DialogueUncontrolled } from "../components/DialogUncontrolled";
 import { PromptTextarea } from "../components/PromptTextarea";
 import Tooltip from "../components/Tooltip";
-import { secondaryButtonClass, selectedModeClass } from "../helpers/buttonClasses";
+import { heading1, secondaryButtonClass, selectedModeClass } from "../helpers/twClasses";
 import SwapButton from "../components/SwapButton";
 import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
 import { confirmBeforeChange } from "../helpers/functions";
@@ -147,18 +147,21 @@ export default function Page() {
 
   return (
     <>
-      <h1 className="mx-auto text-3xl font-extrabold text-center mb-12">Explore AI-to-AI interactions</h1>
-      <div className="flex gap-4 justify-center">
-        <div className="flex flex-col gap-1 text-right">
+      <h1 className={`${heading1} mb-12`}>Explore AI-to-AI interactions</h1>
+      <div className="grid grid-cols-[1fr_auto] gap-4 w-full px-4 md:flex md:flex-row md:items-center md:justify-center">
+        {/* On small screens: Select A + Swap on one row, Select B on the next full-width row.
+            On md+: behave as a horizontal row: Select A, Swap, Select B. */}
+        <div className="w-full">
           <SelectWithDisabled
             id="modelA"
             value={selectedModelA}
             onChange={handleModelAChange}
             disabledOption={selectedModelB}
+            className="w-full max-w-[220px] md:w-auto"
           />
         </div>
 
-        <div className="flex items-center">
+        <div className="flex items-center my-2 md:my-0 md:mx-2">
           <SwapButton
             className="p-2"
             onClick={() => {
@@ -179,17 +182,18 @@ export default function Page() {
           />
         </div>
 
-        <div className="flex flex-col gap-1 text-right">
+        <div className="w-full col-span-2 md:col-auto md:w-auto">
           <SelectWithDisabled
             id="modelB"
             value={selectedModelB}
             onChange={handleModelBChange}
             disabledOption={selectedModelA}
+            className="w-full md:w-auto"
           />
         </div>
       </div>
-      <div className="grid grid-cols-[1fr_2fr_1fr] gap-6 h-screen px-6 py-12 box-border">
-        <aside className="flex flex-col text-center">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr] gap-6 min-h-screen px-4 py-8 box-border">
+        <aside className="flex flex-col text-center md:order-1 order-2">
           <h2 className="text-xl font-extrabold mb-2">⚔️ Debate topics</h2>
           <nav className="flex flex-col">
             {left.map((it) => (
@@ -212,7 +216,7 @@ export default function Page() {
           </nav>
         </aside>
 
-        <main className="flex flex-col px-4 items-center">
+        <main className="flex flex-col px-4 items-center md:order-2 order-1">
           <div className="w-full">
             <PromptTextarea
               label="System prompt"
@@ -296,7 +300,7 @@ export default function Page() {
           )}
         </main>
 
-        <aside className="flex flex-col text-center">
+        <aside className="flex flex-col text-center md:order-3 order-3">
           <h2 className="text-xl font-extrabold mb-2">🤝 Storytelling</h2>
           <nav className="flex flex-col">
             {right.map((it) => (

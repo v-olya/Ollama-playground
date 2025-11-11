@@ -1,6 +1,7 @@
 "use client";
 
 import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
+import { formInput } from "../helpers/twClasses";
 
 interface SelectWithDisabledProps {
   id: string;
@@ -8,13 +9,22 @@ interface SelectWithDisabledProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   disabledOption?: string;
+  // optional extra classes to apply to the select element
+  className?: string;
 }
 
-export function SelectWithDisabled({ id, value, onChange, disabled = false, disabledOption }: SelectWithDisabledProps) {
+export function SelectWithDisabled({
+  id,
+  value,
+  onChange,
+  disabled = false,
+  disabledOption,
+  className,
+}: SelectWithDisabledProps) {
   return (
     <select
       id={id}
-      className="rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-300"
+      className={`${formInput} ${className ?? ""}`}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}

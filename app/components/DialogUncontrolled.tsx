@@ -2,11 +2,10 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ConversationLayout } from "./ConversationLayout";
-import { secondaryButtonClass } from "../helpers/buttonClasses";
+import { secondaryButtonClass, primaryButtonBase, card } from "../helpers/twClasses";
 import { type Message } from "../helpers/types";
 import { getMessage, nextId } from "../helpers/functions";
 import Link from "next/link";
-import { primaryButtonBase } from "../helpers/buttonClasses";
 
 interface DialogueUncontrolledProps {
   systemPrompt: string;
@@ -354,7 +353,7 @@ export function DialogueUncontrolled({
   };
 
   return (
-    <section className="flex w-full flex-col gap-3 rounded-md border border-zinc-200 bg-white p-4 shadow-sm">
+    <section className={`flex w-full flex-col gap-3 ${card} p-4`}>
       <header className="flex flex-col gap-2 text-center">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold tracking-wide text-zinc-700">AI-to-AI Dialogue</h3>

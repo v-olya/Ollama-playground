@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
+import { navInner } from "./helpers/twClasses";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,8 +31,8 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <div className="min-h-screen">
-          <nav className="fixed top-0 left-0 right-0 z-50 border-b border-zinc-200 bg-white/60 backdrop-blur-sm">
-            <div className="mx-auto max-w-6xl flex items-center justify-start space-x-4 px-4 py-3">
+          <nav className="sticky top-0 z-50 border-b border-zinc-200 bg-white/60 backdrop-blur-sm">
+            <div className={navInner}>
               <a href="https://github.com/v-olya/olla" target="_blank" rel="noopener noreferrer" className="nav-link">
                 GitHub Repo
               </a>
@@ -47,8 +48,7 @@ export default function RootLayout({
             </div>
           </nav>
 
-          {/* add top padding so page content isn't hidden behind fixed nav */}
-          <div className="min-h-screen pt-16 py-12">{children}</div>
+          <div className="min-h-screen py-12">{children}</div>
         </div>
       </body>
     </html>
