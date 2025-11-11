@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { SelectWithDisabled } from "../components/SelectWithDisabled";
 import { PromptTextarea } from "../components/PromptTextarea";
@@ -8,6 +8,7 @@ import { ConversationLayout } from "../components/ConversationLayout";
 import { SendButton } from "../components/SendButton";
 import { THINKING_MODELS } from "../contexts/ModelSelectionContext";
 import { type Message } from "../helpers/types";
+import { sendOllamaAction, isAbortError } from "../helpers/functions";
 import {
   sectionHeading,
   card,
@@ -20,6 +21,7 @@ import {
   mutedXs,
   tableCell,
   tableHeader,
+  secondaryButtonClass,
 } from "../helpers/twClasses";
 
 const defaultSystem = `You are an impartial AI judge tasked with evaluating a dialogue between two AI models. You must remain neutral and analytical. Score each model on the following criteria (1-10 scale):
@@ -68,6 +70,73 @@ type UnknownRecord = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is UnknownRecord => typeof value === "object" && value !== null;
 
+const parseBreakdown = (value: unknown, label: string): ScoreBreakdown => {
+  if (!value || typeof value !== "object") {
+    throw new Error(`${label} scores must be an object`);
+  }
+  const record = value as Record<string, unknown>;
+  const breakdown = {} as ScoreBreakdown;
+  for (const { key } of scoreFieldMeta) {
+    const rawScore = record[key];
+    // Accept numbers or numeric strings representing 1..10 scale
+    let score: number;
+    if (typeof rawScore === "number" && Number.isFinite(rawScore)) {
+      score = rawScore;
+    } else if (typeof rawScore === "string") {
+      const parsed = Number.parseFloat(rawScore);
+      if (Number.isFinite(parsed)) {
+        score = parsed;
+      } else {
+        throw new Error(`${label}.${key} score is invalid`);
+      }
+    } else {
+      throw new Error(`${label}.${key} score is invalid`);
+    }
+
+    if (!Number.isFinite(score)) {
+      throw new Error(`${label}.${key} score is invalid`);
+    }
+    if (score < 1 || score > 10) {
+      throw new Error(`${label}.${key} score must be between 1 and 10`);
+    }
+    breakdown[key] = score;
+  }
+  return breakdown;
+};
+
+const normalizeWinner = (value: unknown): WinnerLabel => {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("winner must be Model A, Model B, or Tie");
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "model a" || normalized === "model_a" || normalized === "a") {
+    return "Model A";
+  }
+  if (normalized === "model b" || normalized === "model_b" || normalized === "b") {
+    return "Model B";
+  }
+  if (normalized === "tie" || normalized === "draw") {
+    return "Tie";
+  }
+  throw new Error("winner must be Model A, Model B, or Tie");
+};
+
+const parseThinkingSteps = (raw: unknown): string | undefined => {
+  if (typeof raw === "string") return raw.trim() || undefined;
+  if (Array.isArray(raw)) return raw.filter(Boolean).join("\n\n") || undefined;
+  return undefined;
+};
+
+// Helper to abort an AbortController safely (no-op on errors)
+const safeAbortController = (ctrl: AbortController | null | undefined) => {
+  if (!ctrl) return;
+  try {
+    ctrl.abort();
+  } catch {
+    // ignore abort errors
+  }
+};
+
 export default function JudgePage() {
   const isDev = process.env.NODE_ENV === "development";
   const defaultJudgeModel = THINKING_MODELS[0].value;
@@ -81,6 +150,7 @@ export default function JudgePage() {
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
   // Generate user prompt from conversation history
   const generateUserPrompt = (conv: Message[]): string => {
@@ -119,6 +189,21 @@ export default function JudgePage() {
     }
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (controllerRef.current) {
+        try {
+          controllerRef.current.abort();
+        } catch {}
+        controllerRef.current = null;
+      }
+
+      try {
+        void sendOllamaAction("stop", selectedJudgeModel, { keepalive: true });
+      } catch {}
+    };
+  }, [selectedJudgeModel]);
+
   const handleScoreDebate = async () => {
     if (!conversation.length || isScoring) return;
 
@@ -129,19 +214,22 @@ export default function JudgePage() {
     setJudgeResult(null);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_OLLAMA_API_KEY;
+      safeAbortController(controllerRef.current);
+      const controller = new AbortController();
+      controllerRef.current = controller;
 
-      const startResponse = await fetch("/api/ollama", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(apiKey ? { "X-API-Key": apiKey } : {}),
-        },
-        body: JSON.stringify({
-          action: "start",
-          model: selectedJudgeModel,
-        }),
-      });
+      const startResult = await sendOllamaAction("start", selectedJudgeModel, { signal: controller.signal });
+      if (startResult.aborted) {
+        setError(null);
+        setErrorDetails(null);
+        setStatusMessage(null);
+        return;
+      }
+
+      const startResponse = startResult.response;
+      if (!startResponse) {
+        throw new Error("Failed to prepare model");
+      }
 
       const startRaw = await startResponse.text();
 
@@ -176,8 +264,8 @@ export default function JudgePage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(apiKey ? { "X-API-Key": apiKey } : {}),
         },
+        signal: controller.signal,
         body: JSON.stringify({
           model: selectedJudgeModel,
           systemPrompt,
@@ -229,69 +317,13 @@ export default function JudgePage() {
         }
       }
 
-      const parseBreakdown = (value: unknown, label: string): ScoreBreakdown => {
-        if (!value || typeof value !== "object") {
-          throw new Error(`${label} scores must be an object`);
-        }
-        const record = value as Record<string, unknown>;
-        const breakdown = {} as ScoreBreakdown;
-        for (const { key } of scoreFieldMeta) {
-          const rawScore = record[key];
-          // Accept numbers or numeric strings representing 1..10 scale
-          let score: number;
-          if (typeof rawScore === "number" && Number.isFinite(rawScore)) {
-            score = rawScore;
-          } else if (typeof rawScore === "string") {
-            const parsed = Number.parseFloat(rawScore);
-            if (Number.isFinite(parsed)) {
-              score = parsed;
-            } else {
-              throw new Error(`${label}.${key} score is invalid`);
-            }
-          } else {
-            throw new Error(`${label}.${key} score is invalid`);
-          }
-
-          if (!Number.isFinite(score)) {
-            throw new Error(`${label}.${key} score is invalid`);
-          }
-          if (score < 1 || score > 10) {
-            throw new Error(`${label}.${key} score must be between 1 and 10`);
-          }
-          breakdown[key] = score;
-        }
-        return breakdown;
-      };
-
-      const normalizeWinner = (value: unknown): WinnerLabel => {
-        if (typeof value !== "string" || !value.trim()) {
-          throw new Error("winner must be Model A, Model B, or Tie");
-        }
-        const normalized = value.trim().toLowerCase();
-        if (normalized === "model a" || normalized === "model_a" || normalized === "a") {
-          return "Model A";
-        }
-        if (normalized === "model b" || normalized === "model_b" || normalized === "b") {
-          return "Model B";
-        }
-        if (normalized === "tie" || normalized === "draw") {
-          return "Tie";
-        }
-        throw new Error("winner must be Model A, Model B, or Tie");
-      };
-
       const textFeedback = String(candidate.text_feedback ?? "").trim();
       if (!textFeedback) {
         throw new Error("Judge feedback is empty");
       }
 
       // Thinking steps returned by the judge model (developer/debugging only)
-      let thinkingSteps: string | undefined = undefined;
-      if ("thinking_steps" in candidate) {
-        const raw = (candidate as Record<string, unknown>).thinking_steps;
-        if (typeof raw === "string") thinkingSteps = raw.trim();
-        else if (Array.isArray(raw)) thinkingSteps = raw.filter(Boolean).join("\n\n");
-      }
+      const thinkingSteps = parseThinkingSteps((candidate as Record<string, unknown>).thinking_steps);
 
       const result: JudgeResult = {
         modelA: parseBreakdown(candidate.modelA, "Model A"),
@@ -306,6 +338,12 @@ export default function JudgePage() {
       setErrorDetails(null);
       setStatusMessage(null);
     } catch (e) {
+      if (isAbortError(e)) {
+        setError(null);
+        setErrorDetails(null);
+        setStatusMessage(null);
+        return;
+      }
       setJudgeResult(null);
       if (e instanceof JudgeRequestError && e.details) {
         setErrorDetails(e.details);
@@ -316,6 +354,24 @@ export default function JudgePage() {
       setStatusMessage(null);
     } finally {
       setIsScoring(false);
+      if (controllerRef.current) {
+        controllerRef.current = null;
+      }
+    }
+  };
+
+  const stopScoring = async () => {
+    safeAbortController(controllerRef.current);
+    if (controllerRef.current) {
+      controllerRef.current = null;
+    }
+    setIsScoring(false);
+    setStatusMessage(null);
+
+    try {
+      await sendOllamaAction("stop", selectedJudgeModel, { keepalive: true });
+    } catch {
+      // ignore
     }
   };
 
@@ -325,10 +381,22 @@ export default function JudgePage() {
         <Image src="/judge.svg" alt="Judge" width={64} height={64} />
         <div className={`${colStack} gap-2`}>
           <label htmlFor="judge-model" className="my-1 px-3 text-sm font-medium text-zinc-700">
-            Select a thinking model to &nbsp;{" "}
-            <SendButton onClick={handleScoreDebate} disabled={isScoring || !conversation.length}>
-              Score
-            </SendButton>
+            Select a thinking model &nbsp;&nbsp;
+            <div className="inline-flex items-center gap-2">
+              <SendButton onClick={handleScoreDebate} disabled={isScoring || !conversation.length}>
+                Score
+              </SendButton>
+              <button
+                type="button"
+                onClick={stopScoring}
+                disabled={!isScoring}
+                className={`${secondaryButtonClass} ${
+                  isScoring ? "bg-red-600 text-white hover:bg-red-700" : "opacity-60"
+                }`}
+              >
+                Stop
+              </button>
+            </div>
           </label>
           <SelectWithDisabled
             id="judge-model"
