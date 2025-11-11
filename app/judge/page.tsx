@@ -74,6 +74,8 @@ export default function JudgePage() {
   const [selectedJudgeModel, setSelectedJudgeModel] = useState(defaultJudgeModel);
   const [systemPrompt, setSystemPrompt] = useState(defaultSystem);
   const [conversation, setConversation] = useState<Message[]>([]);
+  const [modelA, setModelA] = useState<string>("");
+  const [modelB, setModelB] = useState<string>("");
   const [judgeResult, setJudgeResult] = useState<JudgeResult | null>(null);
   const [isScoring, setIsScoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +106,13 @@ export default function JudgePage() {
     if (!storedConversation) return;
     try {
       const parsed = JSON.parse(storedConversation);
-      setConversation(parsed);
+      if (Array.isArray(parsed)) {
+        setConversation(parsed);
+      } else {
+        setConversation(parsed.conversation || []);
+        setModelA(parsed.modelA || "");
+        setModelB(parsed.modelB || "");
+      }
     } catch (e) {
       console.error("Failed to parse stored conversation:", e);
       setError("Failed to load conversation history");
@@ -333,7 +341,7 @@ export default function JudgePage() {
       </div>
       <div className={gridTwoCol}>
         <div className={colStack}>
-          <h2 className={sectionHeading}>Last Conversation</h2>
+          <h2 className={sectionHeading}>{modelA && modelB ? `${modelA} VS ${modelB}` : "Last Conversation"}</h2>
           <div className={`${card} flex-1 overflow-auto`}>
             {conversation.length ? (
               <ConversationLayout conversation={conversation} useModelLabels={true} labelA="Model A" labelB="Model B" />

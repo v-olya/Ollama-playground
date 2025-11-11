@@ -340,7 +340,14 @@ export function DialogueUncontrolled({
 
   const CallJudge = () => {
     const handleJudgeClick = () => {
-      sessionStorage.setItem("lastConversation", JSON.stringify(conversation));
+      sessionStorage.setItem(
+        "lastConversation",
+        JSON.stringify({
+          conversation,
+          modelA,
+          modelB,
+        })
+      );
     };
 
     return isComplete && conversation.length ? (
