@@ -117,9 +117,11 @@ export default function Page() {
     },
   ];
 
-  const collaborativePrompt = `You are an AI language model engaged in a collaborative dialogue with another AI, not a human. Your goal is to explore ideas and share insights. Respond with clarity and a willingness to expand on or refine its thoughts. Avoid repetition, aim to complement the conversation. IMPORTANT: your answer shold be 1-2 sentences long; the conversation will be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
+  const collaborativePrompt = `You are an AI language model engaged in a collaborative dialogue with another AI, not a human. Your goal is to explore ideas and share insights. Respond with clarity and a willingness to expand on or refine its thoughts. Avoid repetition, aim to complement the conversation.
+IMPORTANT: your answer shold be 1-2 sentences long; the conversation will be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
 
-  const competitivePrompt = `You are an AI language model engaged in a formal debate with another AI, not a human. Be assertive and intellectually rigorous. Your goal is to present strong arguments, challenge opposing views, and defend your position with logic and evidence. IMPORTANT: your answer shold be 1-2 sentences long; the conversation will be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
+  const competitivePrompt = `You are an AI language model engaged in a formal debate with another AI, not a human. Be assertive and intellectually rigorous. Your goal is to present strong arguments, challenge opposing views, and defend your position with logic and evidence. 
+IMPORTANT: your answer shold be 1-2 sentences long; the conversation will be limited to ${maxRounds} rounds (but the reader may want to add another ${maxRounds}).`;
 
   const startDisabled =
     !systemPrompt.trim().length || !userPrompt.trim().length || (isSystemCommitted && !isChatComplete);
@@ -148,18 +150,15 @@ export default function Page() {
   return (
     <>
       <h1 className={`${heading1} mb-12`}>Explore AI-to-AI interactions</h1>
-      <div className="grid grid-cols-[1fr_auto] gap-4 w-full px-4 md:flex md:flex-row md:items-center md:justify-center">
-        <div className="w-full">
+      <div className="w-full px-4">
+        <div className="flex flex-col items-center justify-center sm:flex-row gap-4">
           <SelectWithDisabled
             id="modelA"
             value={selectedModelA}
             onChange={handleModelAChange}
             disabledOption={selectedModelB}
-            className="w-full max-w-[280px] md:w-auto"
+            className="max-w-[280px]"
           />
-        </div>
-
-        <div className="flex items-center my-2 md:my-0 md:mx-2">
           <SwapButton
             className="p-2"
             onClick={() => {
@@ -178,18 +177,16 @@ export default function Page() {
               setSelectedModelB(a);
             }}
           />
-        </div>
-
-        <div className="w-full col-span-2 md:col-auto md:w-auto">
           <SelectWithDisabled
             id="modelB"
             value={selectedModelB}
             onChange={handleModelBChange}
             disabledOption={selectedModelA}
-            className="w-full md:w-auto"
+            className="max-w-[280px]"
           />
         </div>
       </div>
+
       <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr] gap-6 min-h-screen px-4 py-8 box-border">
         <aside className="flex flex-col text-center md:order-1 order-2">
           <h2 className="text-xl font-extrabold mb-2">⚔️ Debate topics</h2>
