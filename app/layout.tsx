@@ -27,7 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="icon" href="/favicon.svg" sizes="any" />
+        <link rel="icon" href="/favicon.png" sizes="32x32" />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <div className="min-h-screen">
@@ -44,6 +44,9 @@ export default function RootLayout({
               </Link>
               <Link href="/clash" className="nav-link">
                 Clash
+              </Link>
+              <Link href="/judge" className="nav-link">
+                Judge
               </Link>
             </div>
           </nav>
