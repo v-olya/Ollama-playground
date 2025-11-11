@@ -4,7 +4,7 @@ import { type ChatPanelHandle } from "../helpers/types";
 import { ChatPanel } from "./ChatPanel";
 import { SendButton } from "./SendButton";
 import { PromptTextarea } from "./PromptTextarea";
-import { ModelSelectionProvider, useModelSelection } from "../contexts/ModelSelectionContext";
+import { ModelSelectionProvider, useModelSelection, CODING_MODELS } from "../contexts/ModelSelectionContext";
 import { secondaryButtonClass } from "../helpers/twClasses";
 import { confirmBeforeChange } from "../helpers/functions";
 
@@ -14,7 +14,7 @@ const DEFAULT_USER_PROMPT = "What is the difference between 'ollama run' and 'ol
 
 export default function TwoChatsLayout() {
   return (
-    <ModelSelectionProvider>
+    <ModelSelectionProvider modelOptions={CODING_MODELS}>
       <TwoChatsLayoutContent />
     </ModelSelectionProvider>
   );

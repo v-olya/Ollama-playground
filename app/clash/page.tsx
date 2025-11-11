@@ -8,7 +8,7 @@ import { PromptTextarea } from "../components/PromptTextarea";
 import Tooltip from "../components/Tooltip";
 import { heading1, secondaryButtonClass, selectedModeClass } from "../helpers/twClasses";
 import SwapButton from "../components/SwapButton";
-import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
+import { DEFAULT_MODELS } from "../contexts/ModelSelectionContext";
 import { confirmBeforeChange } from "../helpers/functions";
 
 export const maxRounds = 3; // Each round = both models respond (A then B)
@@ -20,8 +20,8 @@ export default function Page() {
   const [userPrompt, setUserPrompt] = useState("");
   const [isSystemCommitted, setIsSystemCommitted] = useState(false);
   const [modeSelected, setModeSelected] = useState<"collaborative" | "competitive" | null>(null);
-  const [selectedModelA, setSelectedModelA] = useState(MODEL_OPTIONS[0].value);
-  const [selectedModelB, setSelectedModelB] = useState(MODEL_OPTIONS[1].value);
+  const [selectedModelA, setSelectedModelA] = useState(DEFAULT_MODELS[0].value);
+  const [selectedModelB, setSelectedModelB] = useState(DEFAULT_MODELS[1].value);
   const [chatSession, setChatSession] = useState(0); // to remount DialogueUncontrolled
   const [isChatComplete, setIsChatComplete] = useState(false);
   const [isChatActive, setIsChatActive] = useState(false);

@@ -1,15 +1,15 @@
 "use client";
 
-import { MODEL_OPTIONS } from "../contexts/ModelSelectionContext";
+import { DEFAULT_MODELS } from "../contexts/ModelSelectionContext";
 import { formInput } from "../helpers/twClasses";
 
 interface SelectWithDisabledProps {
   id: string;
-  value: string;
+  value?: string;
   onChange: (value: string) => void;
   disabled?: boolean;
   disabledOption?: string;
-  // optional list to render instead of the default MODEL_OPTIONS
+  // optional list to render instead of the default DEFAULT_MODELS
   options?: Array<{ value: string }>;
   className?: string;
 }
@@ -23,12 +23,12 @@ export function SelectWithDisabled({
   options,
   className,
 }: SelectWithDisabledProps) {
-  const opts = options ?? MODEL_OPTIONS;
+  const opts = options ?? DEFAULT_MODELS;
   return (
     <select
       id={id}
       className={`${formInput} ${className ?? ""}`}
-      value={value}
+      value={value ?? ""}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
     >

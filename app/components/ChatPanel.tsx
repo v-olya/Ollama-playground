@@ -5,7 +5,7 @@ import { SendButton } from "./SendButton";
 import { SelectWithDisabled } from "./SelectWithDisabled";
 import { ConversationLayout } from "./ConversationLayout";
 import { type ActionKey, type Message } from "../helpers/types";
-import { useModelSelection } from "../contexts/ModelSelectionContext";
+import { CODING_MODELS, useModelSelection } from "../contexts/ModelSelectionContext";
 import { getMessage, nextId } from "../helpers/functions";
 import { secondaryButtonClass, formInput, card } from "../helpers/twClasses";
 
@@ -18,8 +18,6 @@ interface ChatPanelProps {
 export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPrompt, mode }: ChatPanelProps, ref) {
   const { selectedA, selectedB, setSelectedA, setSelectedB, setChatStatus } = useModelSelection();
   const selectedModel = mode === "A" ? selectedA : selectedB;
-  const setSelectedModel = mode === "A" ? setSelectedA : setSelectedB;
-
   const [conversation, setConversation] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -334,9 +332,10 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
             <SelectWithDisabled
               id={`model${mode}`}
               value={selectedModel}
+              options={CODING_MODELS}
               onChange={async (newModel) => {
                 const prevModel = selectedModel;
-                setSelectedModel(newModel);
+                (mode === "A" ? setSelectedA : setSelectedB)(newModel);
                 setIsThinking(false);
                 setError(null);
                 try {

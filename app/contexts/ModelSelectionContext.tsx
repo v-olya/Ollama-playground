@@ -11,52 +11,47 @@ export type PanelStatus = {
 type ModelSelection = {
   selectedA: string;
   selectedB: string;
-  setSelectedA: (model: string) => void;
-  setSelectedB: (model: string) => void;
+  setSelectedA: React.Dispatch<React.SetStateAction<string | "">>;
+  setSelectedB: React.Dispatch<React.SetStateAction<string | "">>;
   chatStatus: Record<PanelMode, PanelStatus>;
   setChatStatus: React.Dispatch<React.SetStateAction<Record<PanelMode, PanelStatus>>>;
 };
 
-export const MODEL_OPTIONS = [
+export type Option = { value: string };
+export type ModelOptions = Option[];
+export const DEFAULT_MODELS = [
+  { value: "deepseek-r1:1.5b" },
+  { value: "deepseek-r1:1.5b-qwen-distill-fp16" },
+  { value: "deepseek-v3.1:671b-cloud" },
+  { value: "gemma3:4b" },
+  { value: "glm-4.6:cloud" },
+  { value: "gpt-oss:120b-cloud" },
+  { value: "gpt-oss:20b-cloud" },
+  { value: "kimi-k2:1t-cloud" },
+  { value: "minimax-m2:cloud" },
   { value: "qwen2.5-coder:7b" },
   { value: "qwen3-coder:480b-cloud" },
-  {
-    value: "gpt-oss:120b-cloud",
-  },
-  {
-    value: "gpt-oss:20b-cloud",
-  },
-  {
-    value: "deepseek-v3.1:671b-cloud",
-  },
-  {
-    value: "qwen3-vl:235b-cloud",
-  },
-  {
-    value: "minimax-m2:cloud",
-  },
-  {
-    value: "glm-4.6:cloud",
-  },
-  {
-    value: "kimi-k2:1t-cloud",
-  },
-  {
-    value: "gemma3:4b",
-  },
-  {
-    value: "codegemma:7b-instruct-v1.1-q4_0",
-  },
+  { value: "qwen3-vl:235b-cloud" },
+];
+
+export const CODING_MODELS = [
+  { value: "codegemma:7b-instruct-v1.1-q4_0" },
+  { value: "deepseek-coder:6.7b" },
+  { value: "deepseek-coder:1.3b-instruct-fp16" },
+  { value: "falcon3:7b" },
+  { value: "glm-4.6:cloud" },
+  { value: "qwen2.5-coder:7b" },
+  { value: "qwen3-coder:480b-cloud" },
+  { value: "stable-code:3b" },
 ];
 
 export const THINKING_MODELS = [
+  { value: "deepseek-r1:1.5b" },
+  { value: "deepseek-r1:1.5b-qwen-distill-fp16" },
+  { value: "deepseek-v3.1:671b-cloud" },
+  { value: "gpt-oss:120b-cloud" },
+  { value: "gpt-oss:20b-cloud" },
   { value: "qwen3-coder:480b-cloud" },
-  {
-    value: "gpt-oss:120b-cloud",
-  },
-  {
-    value: "gpt-oss:20b-cloud",
-  },
 ];
 const ModelSelectionContext = createContext<ModelSelection | undefined>(undefined);
 
@@ -66,14 +61,19 @@ export function useModelSelection() {
   return context;
 }
 
-export function ModelSelectionProvider({ children }: { children: React.ReactNode }) {
-  const [selectedA, setSelectedA] = useState(MODEL_OPTIONS[0].value);
-  const [selectedB, setSelectedB] = useState(MODEL_OPTIONS[1].value);
+export function ModelSelectionProvider({
+  children,
+  modelOptions,
+}: {
+  children: React.ReactNode;
+  modelOptions: ModelOptions;
+}) {
+  const [selectedA, setSelectedA] = useState<string>(() => modelOptions[0]?.value);
+  const [selectedB, setSelectedB] = useState<string>(() => modelOptions[1]?.value);
   const [chatStatus, setChatStatus] = useState<Record<PanelMode, PanelStatus>>({
     A: { isLoading: false, isThinking: false, hasHistory: false },
     B: { isLoading: false, isThinking: false, hasHistory: false },
   });
-
   return (
     <ModelSelectionContext.Provider
       value={{ selectedA, selectedB, setSelectedA, setSelectedB, chatStatus, setChatStatus }}
