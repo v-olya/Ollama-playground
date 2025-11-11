@@ -195,9 +195,10 @@ IMPORTANT: You must respond with one or two sentences. The conversation will be 
               <Tooltip key={it.label} content={it.prompt} className="tooltips">
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={(e) => {
                     if (isChatActive) return;
                     safeApplyPrompt("user", it.prompt);
+                    e.currentTarget.blur();
                   }}
                   aria-disabled={isChatActive || undefined}
                   className={`text-left bg-transparent border-0 p-0 text-black font-bold my-2 text-sm transition-opacity ${
@@ -302,9 +303,10 @@ IMPORTANT: You must respond with one or two sentences. The conversation will be 
               <Tooltip key={it.label} content={it.prompt} className="tooltips">
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={(e) => {
                     if (isChatActive) return;
                     safeApplyPrompt("user", it.prompt);
+                    e.currentTarget.blur();
                   }}
                   aria-disabled={isChatActive || undefined}
                   className={`text-left bg-transparent border-0 p-0 text-black font-bold my-2 text-sm transition-opacity ${
