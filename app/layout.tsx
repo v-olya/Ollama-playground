@@ -35,7 +35,12 @@ export default function RootLayout({
         <div className="min-h-screen">
           <nav className="sticky top-0 z-50 border-b border-zinc-200 bg-white/60 backdrop-blur-sm">
             <div className={navInner}>
-              <a href="https://github.com/v-olya/olla" target="_blank" rel="noopener noreferrer" className="nav-link">
+              <a
+                href="https://github.com/v-olya/Ollama-playground"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="nav-link"
+              >
                 GitHub Repo
               </a>
               <Link href="/" className="nav-link">
