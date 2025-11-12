@@ -9,27 +9,13 @@ import { CODING_MODELS, useModelSelection } from "../contexts/ModelSelectionCont
 import { getMessage, nextId, isAbortError, sendOllamaAction, extractResponseError } from "../helpers/functions";
 import { secondaryButtonClass, formInput, card } from "../helpers/twClasses";
 
-export type ChatPanelRunStatus = "start" | "success" | "error" | "cancel";
-
-export type ChatPanelRunEvent = {
-  mode: "A" | "B";
-  runId: number;
-  status: ChatPanelRunStatus;
-  pairToken?: symbol;
-  error?: string;
-};
-
 interface ChatPanelProps {
   systemPrompt: string;
   userPrompt: string;
   mode: "A" | "B";
-  onRunEvent?: (event: ChatPanelRunEvent) => void;
 }
 
-export const ChatPanel = forwardRef(function ChatPanel(
-  { systemPrompt, userPrompt, mode, onRunEvent }: ChatPanelProps,
-  ref
-) {
+export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPrompt, mode }: ChatPanelProps, ref) {
   const { selectedA, selectedB, setSelectedA, setSelectedB, setChatStatus } = useModelSelection();
   const selectedModel = mode === "A" ? selectedA : selectedB;
   const [conversation, setConversation] = useState<Message[]>([]);
@@ -40,16 +26,6 @@ export const ChatPanel = forwardRef(function ChatPanel(
   const generationControllerRef = useRef<AbortController | null>(null);
   const pendingStartRef = useRef<{ model: string; controller: AbortController } | null>(null);
   const runningModelRef = useRef<string | null>(null);
-  const runCounterRef = useRef(0);
-  const activeRunRef = useRef<{ runId: number; pairToken?: symbol } | null>(null);
-
-  const emitRunEvent = useCallback(
-    (event: Omit<ChatPanelRunEvent, "mode">) => {
-      if (!onRunEvent) return;
-      onRunEvent({ mode, ...event });
-    },
-    [mode, onRunEvent]
-  );
 
   const sendAction = useCallback(
     async (
@@ -127,8 +103,9 @@ export const ChatPanel = forwardRef(function ChatPanel(
   useEffect(() => {
     return () => {
       generationControllerRef.current?.abort();
-      if (pendingStartRef.current) {
-        pendingStartRef.current.controller.abort();
+      const pending = pendingStartRef.current;
+      if (pending) {
+        pending.controller.abort();
         pendingStartRef.current = null;
       }
       const modelToStop = runningModelRef.current;
@@ -142,21 +119,17 @@ export const ChatPanel = forwardRef(function ChatPanel(
   }, [sendAction]);
 
   const send = useCallback(
-    async (options?: { resetConversation?: boolean; pairToken?: symbol }) => {
+    async (options?: { resetConversation?: boolean }) => {
       const runModel = selectedModel;
       const trimmed = input.trim() || userPrompt.trim();
       if (!trimmed || !runModel) {
         return false;
       }
 
+      const baseConversation = options?.resetConversation ? [] : conversation;
       if (options?.resetConversation) {
         setConversation([]);
       }
-
-      const pairToken = options?.pairToken;
-      const runId = ++runCounterRef.current;
-      activeRunRef.current = { runId, pairToken };
-      emitRunEvent({ runId, pairToken, status: "start" });
 
       const userMessage: Message = {
         id: nextId("user"),
@@ -166,43 +139,29 @@ export const ChatPanel = forwardRef(function ChatPanel(
 
       setInput("");
       setError(null);
+      const shouldAppendUser = (() => {
+        const last = baseConversation[baseConversation.length - 1];
+        return !(last && last.role === "user" && last.content === trimmed);
+      })();
+      const nextConversation = shouldAppendUser ? [...baseConversation, userMessage] : baseConversation;
 
-      let nextConversation: Message[] = [];
       try {
         setIsLoading(true);
         const result = await sendAction("start", runModel);
         if (result.aborted) {
-          emitRunEvent({ runId, pairToken, status: "cancel" });
-          if (activeRunRef.current?.runId === runId) {
-            activeRunRef.current = null;
-          }
           return false;
         }
         runningModelRef.current = runModel;
-        setConversation((prev) => {
-          if (prev.length > 0) {
-            const last = prev[prev.length - 1];
-            if (last.role === "user" && last.content === userMessage.content) {
-              nextConversation = prev;
-              return prev;
-            }
-          }
-          nextConversation = [...prev, userMessage];
-          return nextConversation;
-        });
+        setConversation(nextConversation);
       } catch (err) {
         const message = getMessage(err);
         setError(message);
-        emitRunEvent({ runId, pairToken, status: "error", error: message });
-        if (activeRunRef.current?.runId === runId) {
-          activeRunRef.current = null;
-        }
         return false;
       } finally {
         setIsLoading(false);
       }
 
-      const payloadMessages = [{ role: "system", content: systemPrompt }, ...nextConversation, userMessage];
+      const payloadMessages = [{ role: "system", content: systemPrompt }, ...nextConversation];
       if (process.env.NODE_ENV !== "production") {
         console.log("Payload messages:", payloadMessages);
       }
@@ -225,10 +184,6 @@ export const ChatPanel = forwardRef(function ChatPanel(
         });
 
         if (controller.signal.aborted) {
-          emitRunEvent({ runId, pairToken, status: "cancel" });
-          if (activeRunRef.current?.runId === runId) {
-            activeRunRef.current = null;
-          }
           return false;
         }
 
@@ -281,26 +236,14 @@ export const ChatPanel = forwardRef(function ChatPanel(
           setConversation((prev) => [...prev, assistantMessage]);
         }
 
-        emitRunEvent({ runId, pairToken, status: "success" });
-        if (activeRunRef.current?.runId === runId) {
-          activeRunRef.current = null;
-        }
         return true;
       } catch (err) {
         const isAbort = isAbortError(err) || controller.signal.aborted;
         if (isAbort) {
-          emitRunEvent({ runId, pairToken, status: "cancel" });
-          if (activeRunRef.current?.runId === runId) {
-            activeRunRef.current = null;
-          }
           return false;
         }
         const message = getMessage(err);
         setError(message);
-        emitRunEvent({ runId, pairToken, status: "error", error: message });
-        if (activeRunRef.current?.runId === runId) {
-          activeRunRef.current = null;
-        }
         return false;
       } finally {
         if (generationControllerRef.current === controller) {
@@ -312,38 +255,14 @@ export const ChatPanel = forwardRef(function ChatPanel(
         }
       }
     },
-    [emitRunEvent, input, selectedModel, sendAction, systemPrompt, userPrompt]
+    [conversation, input, selectedModel, sendAction, systemPrompt, userPrompt]
   );
 
   useImperativeHandle(
     ref,
     () => ({
-      triggerSend: async (pairToken?: symbol) => send({ pairToken, resetConversation: true }),
-      notifyCompanionFailure: (message: string) => {
-        const active = activeRunRef.current;
-        if (!active) return;
-
-        const pending = pendingStartRef.current;
-        if (pending) {
-          pending.controller.abort();
-          pendingStartRef.current = null;
-        }
-
-        generationControllerRef.current?.abort();
-        generationControllerRef.current = null;
-        runningModelRef.current = null;
-        setIsThinking(false);
-        setIsLoading(false);
-        setError(message);
-
-        if (selectedModel) {
-          void sendAction("stop", selectedModel, { keepalive: true }).catch(() => {});
-        }
-
-        activeRunRef.current = null;
-      },
+      triggerSend: async () => send({ resetConversation: true }),
       resetSession: async () => {
-        activeRunRef.current = null;
         setConversation([]);
         setInput("");
         setError(null);
