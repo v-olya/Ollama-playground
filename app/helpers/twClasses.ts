@@ -3,8 +3,6 @@ export const navInner = "mx-auto max-w-7xl flex items-center justify-start flex-
 export const card = "rounded-md border border-zinc-200 bg-white p-4 shadow-sm";
 export const pageContainer = "max-w-7xl mx-auto px-4";
 export const headerRow = "flex items-center justify-center gap-4 mb-8";
-export const colStack = "flex flex-col";
-export const gridTwoCol = "grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6";
 
 export const mutedSm = "text-sm text-zinc-500";
 export const mutedXs = "text-xs font-medium text-zinc-600";
