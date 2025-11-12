@@ -90,8 +90,8 @@ function TwoChatsLayoutContent() {
         </button>
         <SendButton
           onClick={() => {
-            chatA.current?.triggerSend();
-            chatB.current?.triggerSend();
+            void chatA.current?.triggerSend();
+            void chatB.current?.triggerSend();
           }}
           disabled={disableMultipleSending}
         >

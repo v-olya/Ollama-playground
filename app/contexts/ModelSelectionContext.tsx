@@ -6,6 +6,7 @@ export type PanelStatus = {
   isLoading: boolean;
   isThinking: boolean;
   hasHistory: boolean;
+  error: string | null;
 };
 
 type ModelSelection = {
@@ -69,8 +70,8 @@ export function ModelSelectionProvider({
   const [selectedA, setSelectedA] = useState<string>(() => modelOptions[0]?.value);
   const [selectedB, setSelectedB] = useState<string>(() => modelOptions[1]?.value);
   const [chatStatus, setChatStatus] = useState<Record<PanelMode, PanelStatus>>({
-    A: { isLoading: false, isThinking: false, hasHistory: false },
-    B: { isLoading: false, isThinking: false, hasHistory: false },
+    A: { isLoading: false, isThinking: false, hasHistory: false, error: null },
+    B: { isLoading: false, isThinking: false, hasHistory: false, error: null },
   });
   return (
     <ModelSelectionContext.Provider

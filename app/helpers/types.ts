@@ -7,7 +7,7 @@ export interface Message {
 }
 
 export type ChatPanelHandle = {
-  triggerSend: () => void;
+  triggerSend: () => Promise<boolean>;
   resetSession: () => Promise<void>;
   isLoading: boolean;
   isThinking: boolean;

@@ -9,13 +9,27 @@ import { CODING_MODELS, useModelSelection } from "../contexts/ModelSelectionCont
 import { getMessage, nextId, isAbortError, sendOllamaAction, extractResponseError } from "../helpers/functions";
 import { secondaryButtonClass, formInput, card } from "../helpers/twClasses";
 
+export type ChatPanelRunStatus = "start" | "success" | "error" | "cancel";
+
+export type ChatPanelRunEvent = {
+  mode: "A" | "B";
+  runId: number;
+  status: ChatPanelRunStatus;
+  pairToken?: symbol;
+  error?: string;
+};
+
 interface ChatPanelProps {
   systemPrompt: string;
   userPrompt: string;
   mode: "A" | "B";
+  onRunEvent?: (event: ChatPanelRunEvent) => void;
 }
 
-export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPrompt, mode }: ChatPanelProps, ref) {
+export const ChatPanel = forwardRef(function ChatPanel(
+  { systemPrompt, userPrompt, mode, onRunEvent }: ChatPanelProps,
+  ref
+) {
   const { selectedA, selectedB, setSelectedA, setSelectedB, setChatStatus } = useModelSelection();
   const selectedModel = mode === "A" ? selectedA : selectedB;
   const [conversation, setConversation] = useState<Message[]>([]);
@@ -23,12 +37,19 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // controller for aborting a generation request
   const generationControllerRef = useRef<AbortController | null>(null);
   const pendingStartRef = useRef<{ model: string; controller: AbortController } | null>(null);
-  // Track if the model is actually running (not just loading)
   const runningModelRef = useRef<string | null>(null);
-  const skipNextStartRef = useRef(false);
+  const runCounterRef = useRef(0);
+  const activeRunRef = useRef<{ runId: number; pairToken?: symbol } | null>(null);
+
+  const emitRunEvent = useCallback(
+    (event: Omit<ChatPanelRunEvent, "mode">) => {
+      if (!onRunEvent) return;
+      onRunEvent({ mode, ...event });
+    },
+    [mode, onRunEvent]
+  );
 
   const sendAction = useCallback(
     async (
@@ -40,8 +61,6 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         return { aborted: false };
       }
 
-      // If we have a pending start for the model we're trying to stop,
-      // abort the pending controller and avoid sending an extra network stop when the start hasn't completed.
       if (action === "stop") {
         const pending = pendingStartRef.current;
         if (pending && pending.model === model) {
@@ -55,17 +74,14 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         }
       }
 
-      // Create a controller only for start requests so we can cancel a pending start.
       const controller = action === "start" ? new AbortController() : null;
 
       if (controller) {
-        // Cancel any previously pending start and record this one.
         pendingStartRef.current?.controller.abort();
         pendingStartRef.current = { model, controller };
       }
 
       try {
-        // The shared helper returns { aborted, response }.
         const result = await sendOllamaAction(action, model, {
           signal: controller?.signal,
           keepalive: options?.keepalive,
@@ -81,15 +97,12 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
 
         return { aborted: false };
       } catch (err) {
-        // sendOllamaAction should've returned { aborted: true } for AbortErrors,
-        // but ... double-check here.
         const aborted = !!controller?.signal.aborted || isAbortError(err);
         if (aborted) {
           return { aborted: true };
         }
         throw err;
       } finally {
-        // Clear pendingStartRef only if it's still pointing at our controller.
         if (controller && pendingStartRef.current?.controller === controller) {
           pendingStartRef.current = null;
         }
@@ -101,17 +114,16 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
   useEffect(() => {
     setChatStatus((prev) => ({
       ...prev,
-      [mode]: { isLoading, isThinking, hasHistory: conversation.length },
+      [mode]: { isLoading, isThinking, hasHistory: conversation.length > 0, error },
     }));
     return () => {
       setChatStatus((prev) => ({
         ...prev,
-        [mode]: { isLoading: false, isThinking: false, hasHistory: false },
+        [mode]: { isLoading: false, isThinking: false, hasHistory: false, error: null },
       }));
     };
-  }, [mode, isLoading, isThinking, conversation.length, setChatStatus]);
+  }, [mode, isLoading, isThinking, conversation.length, error, setChatStatus]);
 
-  // Cleanup on unmount: abort any in-flight requests and stop the model
   useEffect(() => {
     return () => {
       generationControllerRef.current?.abort();
@@ -119,190 +131,233 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
         pendingStartRef.current.controller.abort();
         pendingStartRef.current = null;
       }
-      // FE should still dispatch "stop" to cover the gap where the server never saw a /compare run
-      // Only send a request if a model is actually running (to save keep-alive requests)
       const modelToStop = runningModelRef.current;
       if (modelToStop) {
         sendAction("stop", modelToStop, { keepalive: true }).catch(() => {
-          // Ignore errors during cleanup
+          // ignore cleanup failures
         });
         runningModelRef.current = null;
       }
     };
   }, [sendAction]);
 
-  const send = useCallback(async () => {
-    const runModel = selectedModel;
-    // prefer hand-typed input, fall back to the shared user prompt if empty
-    const trimmed = input.trim() || userPrompt.trim();
-    if (!trimmed || !runModel) return;
+  const send = useCallback(
+    async (options?: { resetConversation?: boolean; pairToken?: symbol }) => {
+      const runModel = selectedModel;
+      const trimmed = input.trim() || userPrompt.trim();
+      if (!trimmed || !runModel) {
+        return false;
+      }
 
-    const userMessage: Message = {
-      id: nextId("user"),
-      role: "user",
-      content: trimmed,
-    };
-    // Don't append the user message until the model is confirmed to be running
-    let nextConversation: Message[] = [];
-    setInput("");
-    setError(null);
+      if (options?.resetConversation) {
+        setConversation([]);
+      }
 
-    // Check and pull (if needed) before sending
-    try {
-      setIsLoading(true);
-      if (skipNextStartRef.current) {
-        // Send already started the model
-        skipNextStartRef.current = false;
-      } else {
+      const pairToken = options?.pairToken;
+      const runId = ++runCounterRef.current;
+      activeRunRef.current = { runId, pairToken };
+      emitRunEvent({ runId, pairToken, status: "start" });
+
+      const userMessage: Message = {
+        id: nextId("user"),
+        role: "user",
+        content: trimmed,
+      };
+
+      setInput("");
+      setError(null);
+
+      let nextConversation: Message[] = [];
+      try {
+        setIsLoading(true);
         const result = await sendAction("start", runModel);
         if (result.aborted) {
-          return;
+          emitRunEvent({ runId, pairToken, status: "cancel" });
+          if (activeRunRef.current?.runId === runId) {
+            activeRunRef.current = null;
+          }
+          return false;
         }
-        // Model is now loaded and ready
         runningModelRef.current = runModel;
-      }
-      // Guard against adding the same user prompt twice in a row
-      setConversation((prev) => {
-        if (prev.length > 0) {
-          const last = prev[prev.length - 1];
-          if (last.role === "user" && last.content === userMessage.content) {
-            nextConversation = prev;
-            return prev;
-          }
-        }
-        nextConversation = [...prev, userMessage];
-        return nextConversation;
-      });
-    } catch (err) {
-      setError(getMessage(err));
-      return;
-    } finally {
-      setIsLoading(false);
-    }
-
-    const payloadMessages = [{ role: "system", content: systemPrompt }, ...nextConversation, userMessage];
-    if (process.env.NODE_ENV !== "production") {
-      console.log("Payload messages:", payloadMessages);
-    }
-    // Abort the previous generation before start
-    generationControllerRef.current?.abort();
-    const controller = new AbortController();
-    generationControllerRef.current = controller;
-    setIsThinking(true);
-    let streamed = false;
-    try {
-      const res = await fetch("/api/compare", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: runModel,
-          messages: payloadMessages,
-        }),
-      });
-
-      // If aborted immediately, exit silently
-      if (controller.signal.aborted) {
-        return;
-      }
-
-      // Streaming response handling (text/plain chunks)
-      const contentType = res.headers.get("Content-Type") || "";
-      if (res.ok && contentType.includes("text/plain")) {
-        const assistantMessage: Message = {
-          id: nextId("assistant"),
-          role: "assistant",
-          content: "",
-        };
-        setConversation((prev) => [...prev, assistantMessage]);
-
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-        let acc = "";
-
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (controller.signal.aborted) {
-              try {
-                await reader.cancel();
-              } catch {}
-              break; // allow outer finally to run
+        setConversation((prev) => {
+          if (prev.length > 0) {
+            const last = prev[prev.length - 1];
+            if (last.role === "user" && last.content === userMessage.content) {
+              nextConversation = prev;
+              return prev;
             }
-            acc += decoder.decode(value, { stream: true });
-            const latest = acc;
-            setConversation((prev) => prev.map((m) => (m.id === assistantMessage.id ? { ...m, content: latest } : m)));
           }
+          nextConversation = [...prev, userMessage];
+          return nextConversation;
+        });
+      } catch (err) {
+        const message = getMessage(err);
+        setError(message);
+        emitRunEvent({ runId, pairToken, status: "error", error: message });
+        if (activeRunRef.current?.runId === runId) {
+          activeRunRef.current = null;
         }
-        streamed = true; // streaming handled
+        return false;
+      } finally {
+        setIsLoading(false);
       }
 
-      if (!streamed) {
-        // Fallback: JSON response with full text
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data?.error ?? "Failed to fetch model response.");
-        }
-        if (typeof data?.text !== "string") {
-          throw new Error("Model response did not include text output.");
-        }
-        const assistantMessage: Message = {
-          id: nextId("assistant"),
-          role: "assistant",
-          content: data.text,
-        };
-        setConversation((prev) => [...prev, assistantMessage]);
+      const payloadMessages = [{ role: "system", content: systemPrompt }, ...nextConversation, userMessage];
+      if (process.env.NODE_ENV !== "production") {
+        console.log("Payload messages:", payloadMessages);
       }
-    } catch (err) {
-      const isAbort = isAbortError(err) || controller.signal.aborted;
-      if (isAbort) {
-        // user-triggered abort; don't surface as an error
-        return;
-      }
-      setError(getMessage(err));
-    } finally {
-      // Only clear thinking state if this is still the active controller
-      if (generationControllerRef.current === controller) {
+
+      generationControllerRef.current?.abort();
+      const controller = new AbortController();
+      generationControllerRef.current = controller;
+      setIsThinking(true);
+      let streamed = false;
+
+      try {
+        const res = await fetch("/api/compare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: runModel,
+            messages: payloadMessages,
+          }),
+        });
+
+        if (controller.signal.aborted) {
+          emitRunEvent({ runId, pairToken, status: "cancel" });
+          if (activeRunRef.current?.runId === runId) {
+            activeRunRef.current = null;
+          }
+          return false;
+        }
+
+        const contentType = res.headers.get("Content-Type") || "";
+        if (res.ok && contentType.includes("text/plain")) {
+          const assistantMessage: Message = {
+            id: nextId("assistant"),
+            role: "assistant",
+            content: "",
+          };
+          setConversation((prev) => [...prev, assistantMessage]);
+
+          const reader = res.body?.getReader();
+          const decoder = new TextDecoder();
+          let acc = "";
+
+          if (reader) {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (controller.signal.aborted) {
+                try {
+                  await reader.cancel();
+                } catch {}
+                break;
+              }
+              acc += decoder.decode(value, { stream: true });
+              const latest = acc;
+              setConversation((prev) =>
+                prev.map((m) => (m.id === assistantMessage.id ? { ...m, content: latest } : m))
+              );
+            }
+          }
+          streamed = true;
+        }
+
+        if (!streamed) {
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data?.error ?? "Failed to fetch model response.");
+          }
+          if (typeof data?.text !== "string") {
+            throw new Error("Model response did not include text output.");
+          }
+          const assistantMessage: Message = {
+            id: nextId("assistant"),
+            role: "assistant",
+            content: data.text,
+          };
+          setConversation((prev) => [...prev, assistantMessage]);
+        }
+
+        emitRunEvent({ runId, pairToken, status: "success" });
+        if (activeRunRef.current?.runId === runId) {
+          activeRunRef.current = null;
+        }
+        return true;
+      } catch (err) {
+        const isAbort = isAbortError(err) || controller.signal.aborted;
+        if (isAbort) {
+          emitRunEvent({ runId, pairToken, status: "cancel" });
+          if (activeRunRef.current?.runId === runId) {
+            activeRunRef.current = null;
+          }
+          return false;
+        }
+        const message = getMessage(err);
+        setError(message);
+        emitRunEvent({ runId, pairToken, status: "error", error: message });
+        if (activeRunRef.current?.runId === runId) {
+          activeRunRef.current = null;
+        }
+        return false;
+      } finally {
+        if (generationControllerRef.current === controller) {
+          generationControllerRef.current = null;
+        }
         setIsThinking(false);
-        generationControllerRef.current = null;
         if (runningModelRef.current === runModel) {
           runningModelRef.current = null;
         }
       }
-    }
-  }, [input, selectedModel, systemPrompt, userPrompt, sendAction]);
+    },
+    [emitRunEvent, input, selectedModel, sendAction, systemPrompt, userPrompt]
+  );
 
-  // expose an imperative handle so parent can trigger actions
   useImperativeHandle(
     ref,
     () => ({
-      triggerSend: async () => {
-        setConversation([]);
-        setError(null);
-        let abortedStart = false;
-        try {
-          setIsLoading(true);
-          const result = await sendAction("start", selectedModel);
-          abortedStart = result.aborted;
-        } catch (err) {
-          setError(getMessage(err));
-          abortedStart = true;
-        } finally {
-          setIsLoading(false);
+      triggerSend: async (pairToken?: symbol) => send({ pairToken, resetConversation: true }),
+      notifyCompanionFailure: (message: string) => {
+        const active = activeRunRef.current;
+        if (!active) return;
+
+        const pending = pendingStartRef.current;
+        if (pending) {
+          pending.controller.abort();
+          pendingStartRef.current = null;
         }
-        if (!abortedStart) {
-          skipNextStartRef.current = true;
-          await send();
+
+        generationControllerRef.current?.abort();
+        generationControllerRef.current = null;
+        runningModelRef.current = null;
+        setIsThinking(false);
+        setIsLoading(false);
+        setError(message);
+
+        if (selectedModel) {
+          void sendAction("stop", selectedModel, { keepalive: true }).catch(() => {});
         }
+
+        activeRunRef.current = null;
       },
-      isLoading: isLoading,
-      isThinking: isThinking,
       resetSession: async () => {
+        activeRunRef.current = null;
         setConversation([]);
         setInput("");
         setError(null);
         setIsThinking(false);
+
+        const pending = pendingStartRef.current;
+        if (pending) {
+          pending.controller.abort();
+          pendingStartRef.current = null;
+        }
+
+        generationControllerRef.current?.abort();
+        generationControllerRef.current = null;
+
         if (!selectedModel) {
           return;
         }
@@ -318,6 +373,8 @@ export const ChatPanel = forwardRef(function ChatPanel({ systemPrompt, userPromp
           setIsLoading(false);
         }
       },
+      isLoading,
+      isThinking,
     }),
     [isLoading, isThinking, selectedModel, send, sendAction]
   );
