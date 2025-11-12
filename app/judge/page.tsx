@@ -391,7 +391,7 @@ export default function JudgePage() {
                 onClick={stopScoring}
                 disabled={!isScoring}
                 className={`${secondaryButtonClass} ${
-                  isScoring ? "bg-red-600 text-white hover:bg-red-700" : "opacity-60"
+                  isScoring ? "bg-red-800 text-white hover:bg-red-700" : "cursor-not-allowed"
                 }`}
               >
                 Stop
