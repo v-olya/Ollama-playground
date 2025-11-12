@@ -39,7 +39,6 @@ export const CODING_MODELS = [
   { value: "deepseek-coder:6.7b" },
   { value: "deepseek-coder:1.3b-instruct-fp16" },
   { value: "falcon3:7b" },
-  { value: "glm-4.6:cloud" },
   { value: "qwen2.5-coder:7b" },
   { value: "qwen3-coder:480b-cloud" },
   { value: "stable-code:3b" },
