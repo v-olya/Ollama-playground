@@ -69,6 +69,14 @@ export async function POST(request: Request) {
       return;
     }
 
+    const currentEntry = key && controller ? activeByModel.get(key) : undefined;
+    const superseded = !!(currentEntry && currentEntry.controller !== controller);
+
+    if (superseded) {
+      cleanup();
+      return;
+    }
+
     if (!stopIssued) {
       stopIssued = true;
       console.log(`Auto-stopping model after ${reason}:`, model);
