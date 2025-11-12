@@ -58,3 +58,7 @@ body {
   outline: 1px rgba(20, 20, 20, 0.06);
   outline-offset: 2px;
 }
+
+.set-line-height {
+  line-height: 1.8;
+}

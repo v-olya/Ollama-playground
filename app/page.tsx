@@ -48,7 +48,7 @@ export default function Home() {
               </span>
             </Link>
           </h2>
-          <div className="text-slate-600 leading-relaxed text-sm">
+          <div className="text-slate-600 leading-relaxed text-sm set-line-height">
             <p>
               <b>Find the model that fits your needs</b> by running the same prompt against two Ollama models at once.
             </p>
