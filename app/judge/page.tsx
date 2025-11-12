@@ -15,8 +15,6 @@ import {
   errorAlert,
   pageContainer,
   headerRow,
-  colStack,
-  gridTwoCol,
   mutedSm,
   mutedXs,
   tableCell,
@@ -183,6 +181,7 @@ export default function JudgePage() {
         setModelA(parsed.modelA || "");
         setModelB(parsed.modelB || "");
       }
+      document.querySelector("textarea")?.focus();
     } catch (e) {
       console.error("Failed to parse stored conversation:", e);
       setError("Failed to load conversation history");
@@ -379,7 +378,7 @@ export default function JudgePage() {
     <div className={pageContainer}>
       <div className={headerRow}>
         <Image src="/judge.svg" alt="Judge" width={64} height={64} />
-        <div className={`${colStack} gap-2`}>
+        <div className="flex flex-col gap-2">
           <label htmlFor="judge-model" className="my-1 px-3 text-sm font-medium text-zinc-700">
             Select a thinking model &nbsp;&nbsp;
             <div className="inline-flex items-center gap-2">
@@ -407,8 +406,8 @@ export default function JudgePage() {
           />{" "}
         </div>
       </div>
-      <div className={gridTwoCol}>
-        <div className={colStack}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="flex flex-col">
           <h2 className={sectionHeading}>
             {modelA && modelB ? (
               <>
@@ -418,7 +417,7 @@ export default function JudgePage() {
               "Last Conversation"
             )}
           </h2>
-          <div className={`${card} flex-1 overflow-auto`}>
+          <div className="flex-1 overflow-auto">
             {conversation.length ? (
               <ConversationLayout conversation={conversation} useModelLabels={true} labelA="Model A" labelB="Model B" />
             ) : (
@@ -433,7 +432,7 @@ export default function JudgePage() {
           </div>
         </div>
 
-        <div className={colStack}>
+        <div className="flex flex-col">
           <h2 className={sectionHeading}>Judge Configuration</h2>
           <div className="[&>label>:first-child]:hidden">
             <PromptTextarea
