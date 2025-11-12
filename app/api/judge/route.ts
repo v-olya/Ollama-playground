@@ -295,7 +295,7 @@ CRITICAL: Use these EXACT key names: "modelA", "modelB" (camelCase), do NOT any 
     }
 
     if (isDev) {
-      console.debug("[judge] message.content:", content.slice(0, 4000));
+      // console.debug("[judge] message.content:", content.slice(0, 2000));
     }
 
     // Parse the JSON content returned by the model
