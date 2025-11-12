@@ -7,84 +7,47 @@
 
 ## Prerequisites
 
-- **Ollama**: This project requires the Ollama CLI to be installed and running locally.
-  Downloads are available at https://ollama.com/download. After installation, you should sign up https://signin.ollama.com/, create the API key, set it as NextJS public environmental variable.
-
-## Installation
-
-1. Clone the repository:
-
-   ```bash
-   git clone <repository-url>
-   cd olla
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-## Scripts
-
-- **Development**: Start the development server:
-
-  ```bash
-  npm run dev
-  ```
-
-- **Build**: Create a production build:
-
-  ```bash
-  npm run build
-  ```
-
-- **Start**: Run the production server:
-
-  ```bash
-  npm run start
-  ```
-
-- **Lint**: Check for linting errors:
-
-  ```bash
-  npm run lint
-  ```
-
-- **Type Check**: Run TypeScript type checks:
-
-  ```bash
-  npm run tsc
-  ```
+**Ollama**: This project requires the Ollama CLI to be installed and running locally.
+Downloads are available at https://ollama.com/download. After installation, you should sign up https://signin.ollama.com/, create the API key, set it as NextJS public environmental variable.
 
 ## Configuration
 
-- **Environment Variables**:
-  - Create a `.env` file in the root directory (or rename `.example.env`)
-  - Define the required variables: `BASE_URL`, `OLLAMA_API_KEY`.
+- Create a `.env` file in the root directory (or rename `.example.env`)
+- Define the required variables: `BASE_URL`, `OLLAMA_API_KEY`.
 
 ## Pages
 
-- **/compare** — An interactive page for side-by-side comparison of model outputs. It provides two chat panels so you can run the same prompt (or different prompts) against two model selections and compare results visually and functionally.
+- **/compare** — An interactive page for side-by-side comparison of model outputs. It provides two chat panels so you can run the same (or different) prompts against two models and compare the results.
 
-  - How it works: the UI component (`/compare`) calls the server API route at `/api/compare/` to run the models and stream the outputs.
+The UI component (`/compare`) calls the API route `/api/compare/` to run the models and stream the outputs.
+
+![Compare - running](https://github.com/v-olya/Ollama-playground/blob/master/public/screenshots/Compare-running.png)
 
 - **/clash** — An interactive page to run two models against each other. It provides controls to pick Model A and Model B, choose or edit a system prompt (competitive or collaborative modes), and start (or stop) multi-round AI-to-AI conversation.
 
-  - How it works: the page (`/clash`) composes a system prompt and a user prompt, then the server route at `/api/clash/` streams alternating responses from the selected models. The route returns events as newline-delimited JSON so the UI can render streaming deltas.
+The (`/clash`) page composes a system prompt and a user prompt, then the server route at `/api/clash/` streams alternating responses from the selected models. The route returns events as newline-delimited JSON so the UI can render streaming deltas.
+
+![AI-to-AI dialogue](https://github.com/v-olya/Ollama-playground/blob/master/public/screenshots/Compete-or-Collaborate.png)
+![Call the judge action](https://github.com/v-olya/Ollama-playground/blob/master/public/screenshots/Call-the-judge.png)
 
 - **/judge** — Evaluate a finished conversation between two models and produce numeric scores and feedback. The judge itself is an AI model that you can select in the UI. The `/judge` page reads the conversation from sessionStorage, sends it to the `/api/judge/` route, and renders a scored breakdown and textual feedback.
 
-  - Scoring format: the judge expects each metric to be a numeric score on a 1–10 scale. The UI displays each metric as `N.N/10` and shows an overall winner and a short written critique.
+The (`app/judge`) page posts the dialogue and prompts to the server route at `/api/judge/`. That route runs the judge model, enforces the JSON schema, validates the response, and returns a JSON object containing `modelA`, `modelB` (each a breakdown of metrics), `winner`, and `text_feedback`.
 
-  - How it works: the page (`app/judge`) posts the dialogue and prompts to the server route at `/api/judge/`. That route runs the judge model, enforces the JSON schema, validates the response, and returns a JSON object containing `modelA`, `modelB` (each a breakdown of metrics), `winner`, and `text_feedback`.
+Scoring format: the judge expects each metric to be a numeric score on a 1–10 scale. The UI displays each metric as `N.N/10` and shows an overall winner and a short written critique.
 
-## Note
+![Judge - thinking](https://github.com/v-olya/Ollama-playground/blob/master/public/screenshots/Judge-thinking.png)
+![Judge's verdict](https://github.com/v-olya/Ollama-playground/blob/master/public/screenshots/Judge%27s-verdict.png)
 
-It is not necessary to have the models loaded locally before starting. Every model will be pulled if necessary and then unloaded from memory during the cleanup process.
+- **/home** — Just a minimal layout with two teasers for the Compare and Clash pages. The Judge page is accessible through the navbar too and reads the last debate (if any) from the sessionStorage.
 
-## Screenshot
+  ![Home](https://github.com/v-olya/Ollama-playground/blob/master/public/screenshots/Home.png)
 
-Although this application is fully responsive, we'll place here desktop screenshots only.
+## Notes
+
+- It is not necessary to have the models loaded locally before starting. Every model will be pulled if necessary and then unloaded from memory during the cleanup process.
+
+- Although this application is fully responsive, we'll place here desktop screenshots only. All the images are served from /public/screenshots; raw URLs used to render images on GitHub.
 
 ## License
 
